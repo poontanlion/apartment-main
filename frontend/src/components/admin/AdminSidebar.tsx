@@ -43,7 +43,14 @@ export const AdminSidebar: React.FC = () => {
     };
   }, [location.pathname]);
 
-  const navItems = [
+  interface NavItem {
+    name: string;
+    path: string;
+    icon: any;
+    badge?: number;
+  }
+
+  const navItems: NavItem[] = [
     { name: t('admin.nav.dashboard'), path: '/admin/dashboard', icon: LayoutDashboard },
     { name: t('admin.nav.buildings'), path: '/admin/buildings', icon: Building2 },
     { name: t('admin.nav.rooms'), path: '/admin/rooms', icon: BedDouble },
