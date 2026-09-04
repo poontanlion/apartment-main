@@ -155,7 +155,11 @@ export const deleteRoom = async (id: string): Promise<void> => {
 // TENANTS API
 // ----------------------------------------------------
 export const getTenants = async (): Promise<Tenant[]> => {
-  return fetchJson<Tenant[]>(`${API_BASE}/tenants`);
+  try {
+    return await fetchJson<Tenant[]>(`${API_BASE}/tenants`);
+  } catch {
+    return [];
+  }
 };
 
 export const saveTenant = async (tenantData: Partial<Tenant>): Promise<Tenant> => {
@@ -179,7 +183,11 @@ export const deleteTenant = async (id: string): Promise<void> => {
 // LEASES & OCCUPANCY CONFLICT PREVENTION API
 // ----------------------------------------------------
 export const getLeases = async (): Promise<Lease[]> => {
-  return fetchJson<Lease[]>(`${API_BASE}/leases`);
+  try {
+    return await fetchJson<Lease[]>(`${API_BASE}/leases`);
+  } catch {
+    return [];
+  }
 };
 
 export const checkLeaseConflict = async (
@@ -217,7 +225,11 @@ export const terminateLease = async (leaseId: string): Promise<void> => {
 // UTILITY BILLS & RECEIPT API
 // ----------------------------------------------------
 export const getUtilityBills = async (): Promise<UtilityBill[]> => {
-  return fetchJson<UtilityBill[]>(`${API_BASE}/utility-bills`);
+  try {
+    return await fetchJson<UtilityBill[]>(`${API_BASE}/utility-bills`);
+  } catch {
+    return [];
+  }
 };
 
 export const saveUtilityBill = async (billData: Partial<UtilityBill>): Promise<UtilityBill> => {
@@ -248,7 +260,11 @@ export const updateBillStatus = async (billId: string, status: BillStatus, slipI
 // MAINTENANCE TASKS & SUPPLY USAGE API
 // ----------------------------------------------------
 export const getMaintenanceTasks = async (): Promise<MaintenanceTask[]> => {
-  return fetchJson<MaintenanceTask[]>(`${API_BASE}/maintenance-tasks`);
+  try {
+    return await fetchJson<MaintenanceTask[]>(`${API_BASE}/maintenance-tasks`);
+  } catch {
+    return [];
+  }
 };
 
 export const getUserMaintenanceTasks = async (email: string): Promise<MaintenanceTask[]> => {
@@ -298,8 +314,12 @@ export const saveSupply = async (supplyData: Partial<SupplyItem>): Promise<Suppl
 // MAINTENANCE LOGS API (PER-UNIT HISTORY)
 // ----------------------------------------------------
 export const getMaintenanceLogs = async (roomId?: string): Promise<MaintenanceLog[]> => {
-  const url = roomId ? `${API_BASE}/maintenance-logs?roomId=${roomId}` : `${API_BASE}/maintenance-logs`;
-  return fetchJson<MaintenanceLog[]>(url);
+  try {
+    const url = roomId ? `${API_BASE}/maintenance-logs?roomId=${roomId}` : `${API_BASE}/maintenance-logs`;
+    return await fetchJson<MaintenanceLog[]>(url);
+  } catch {
+    return [];
+  }
 };
 
 export const saveMaintenanceLog = async (logData: Partial<MaintenanceLog>): Promise<MaintenanceLog> => {
@@ -325,7 +345,11 @@ export const deleteMaintenanceLog = async (id: string): Promise<void> => {
 // SCHEDULED REMINDERS API
 // ----------------------------------------------------
 export const getReminders = async (): Promise<ScheduledReminder[]> => {
-  return fetchJson<ScheduledReminder[]>(`${API_BASE}/reminders`);
+  try {
+    return await fetchJson<ScheduledReminder[]>(`${API_BASE}/reminders`);
+  } catch {
+    return [];
+  }
 };
 
 export const saveReminder = async (reminderData: Partial<ScheduledReminder>): Promise<ScheduledReminder> => {
@@ -353,11 +377,19 @@ export const toggleReminder = async (id: string): Promise<ScheduledReminder | nu
 // BOOKINGS API (PUBLIC BOOKING REQUESTS)
 // ----------------------------------------------------
 export const getBookings = async (): Promise<Booking[]> => {
-  return fetchJson<Booking[]>(`${API_BASE}/bookings`);
+  try {
+    return await fetchJson<Booking[]>(`${API_BASE}/bookings`);
+  } catch {
+    return [];
+  }
 };
 
 export const getUserBookings = async (email: string): Promise<Booking[]> => {
-  return fetchJson<Booking[]>(`${API_BASE}/bookings/user/${encodeURIComponent(email)}`);
+  try {
+    return await fetchJson<Booking[]>(`${API_BASE}/bookings/user/${encodeURIComponent(email)}`);
+  } catch {
+    return [];
+  }
 };
 
 export const createBooking = async (bookingData: Partial<Booking>): Promise<Booking> => {
@@ -389,7 +421,11 @@ export const cancelBooking = async (bookingId: string): Promise<Booking | null> 
 };
 
 export const trackBookings = async (query: string): Promise<Booking[]> => {
-  return fetchJson<Booking[]>(`${API_BASE}/bookings/track?query=${encodeURIComponent(query)}`);
+  try {
+    return await fetchJson<Booking[]>(`${API_BASE}/bookings/track?query=${encodeURIComponent(query)}`);
+  } catch {
+    return [];
+  }
 };
 
 
@@ -397,7 +433,11 @@ export const trackBookings = async (query: string): Promise<Booking[]> => {
 // NOTIFICATIONS API
 // ----------------------------------------------------
 export const getNotifications = async (): Promise<AppNotification[]> => {
-  return fetchJson<AppNotification[]>(`${API_BASE}/notifications`);
+  try {
+    return await fetchJson<AppNotification[]>(`${API_BASE}/notifications`);
+  } catch {
+    return [];
+  }
 };
 
 export const addNotification = async (notif: Partial<AppNotification>): Promise<AppNotification> => {
@@ -436,7 +476,11 @@ export const deleteNotification = async (id: string): Promise<void> => {
 // ACTIVITY LOGS API
 // ----------------------------------------------------
 export const getActivityLogs = async (): Promise<ActivityLog[]> => {
-  return fetchJson<ActivityLog[]>(`${API_BASE}/activity-logs`);
+  try {
+    return await fetchJson<ActivityLog[]>(`${API_BASE}/activity-logs`);
+  } catch {
+    return [];
+  }
 };
 
 // ----------------------------------------------------
