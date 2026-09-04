@@ -18,8 +18,6 @@ const ALL_AMENITIES = [
 ];
 
 export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onSave, defaultBuildingId }) => {
-  if (!isOpen) return null;
-
   const { t, language } = useLanguage();
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string>(room?.buildingId || defaultBuildingId || '');
@@ -93,6 +91,8 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
   };
 
   const inputClass = "w-full p-3 bg-nike-soft-cloud dark:bg-nike-dark-card border border-nike-hairline dark:border-nike-dark-card text-nike-ink dark:text-white text-[14px] rounded-xl focus:outline-none";
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>

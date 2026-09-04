@@ -123,7 +123,11 @@ export const deleteBuilding = async (id: string): Promise<void> => {
 // ROOMS / APARTMENT UNITS API
 // ----------------------------------------------------
 export const getRooms = async (): Promise<Room[]> => {
-  return fetchJson<Room[]>(`${API_BASE}/rooms`);
+  try {
+    return await fetchJson<Room[]>(`${API_BASE}/rooms`);
+  } catch {
+    return [];
+  }
 };
 
 export const getRoomById = async (id: string): Promise<Room | null> => {
