@@ -10,8 +10,36 @@ export interface User {
 
 export interface Booking {
   id: string;
-  roomId?: string;
-  userEmail?: string;
-  status: 'Pending' | 'Approved' | 'Rejected' | 'Completed';
-  createdAt?: string;
+  bookingNo: string;
+  roomId: string;
+  roomNumber?: string;
+  guestName: string;
+  guestPhone: string;
+  guestEmail: string;
+  checkIn: string;
+  checkOut: string;
+  guestCount: number;
+  totalPrice: number;
+  specialRequests?: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface AppNotification {
+  id: string;
+  userId?: string;
+  title: string;
+  message: string;
+  type?: 'info' | 'success' | 'warning' | 'error';
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  userId?: string;
+  userName?: string;
+  action: string;
+  details: string;
+  createdAt: string;
 }

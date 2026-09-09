@@ -1,3 +1,22 @@
+# Maven
+**/target/
+backend/target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+
+# Node / Frontend
+**/node_modules/
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Logs
 # ==========================================
 # Dependencies & Build Outputs (Node / Vite)
 # ==========================================
@@ -28,6 +47,13 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/
 pnpm-debug.log*
 
 .env
