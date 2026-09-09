@@ -1,19 +1,38 @@
-package com.app.service;
+package com.victory.apartment.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
 import org.springframework.stereotype.Service;
+
+import com.victory.apartment.model.ActivityLog;
+import com.victory.apartment.repository.ActivityLogRepository;
 
 @Service
 public class ActivityLogService {
 
-    private static final Logger log = LoggerFactory.getLogger(ActivityLogService.class);
+    private final ActivityLogRepository repo;
 
-    public void log(String action, String details) {
-        log("Admin", action, details);
+    public ActivityLogService(ActivityLogRepository repo) {
+        this.repo = repo;
     }
 
-    public void log(String userName, String action, String details) {
-        log.info("[ActivityLog] [{}] {}: {}", userName, action, details);
+    public List<ActivityLog> getAll() {
+        return repo.findTop50ByOrderByCreatedAtDesc();
+    }
+
+    public void log(String action, String details) {
+        log(action, details, "Admin");
+    }
+
+    public void log(String action, String details, String userName) {
+        ActivityLog entry = new ActivityLog();
+        entry.setId("act-" + UUID.randomUUID().toString().substring(0, 8));
+        entry.setUserName(userName);
+        entry.setAction(action);
+        entry.setDetails(details);
+        entry.setCreatedAt(LocalDateTime.now());
+        repo.save(entry);
     }
 }
