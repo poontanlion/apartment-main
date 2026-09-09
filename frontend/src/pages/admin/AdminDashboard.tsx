@@ -1,0 +1,318 @@
+import React, { useEffect, useState } from 'react';
+import {
+  Building2, CheckCircle2, Wrench,
+  DollarSign, BellRing, FileText, PlusCircle, RotateCw
+} from 'lucide-react';
+import { Room, Lease, UtilityBill, MaintenanceTask, ScheduledReminder } from '../../types';
+import {
+  getRooms, getLeases, getUtilityBills,
+  getMaintenanceTasks, getReminders
+} from '../../services/api';
+import { formatCurrency } from '../../utils/formatters';
+import { ApartmentFloorGrid } from '../../components/admin/ApartmentFloorGrid';
+import { Link } from 'react-router-dom';
+import { useLanguage } from '../../context/LanguageContext';
+import { toast } from 'sonner';
+
+export const AdminDashboard: React.FC = () => {
+  const { t, language } = useLanguage();
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [leases, setLeases] = useState<Lease[]>([]);
+  const [bills, setBills] = useState<UtilityBill[]>([]);
+  const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
+  const [reminders, setReminders] = useState<ScheduledReminder[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchDashboardData = async () => {
+    try {
+      setRooms(await getRooms());
+      setLeases(await getLeases());
+      setBills(await getUtilityBills());
+      setTasks(await getMaintenanceTasks());
+      setReminders(await getReminders());
+    } catch (err) {
+      console.error('Failed to fetch dashboard data:', err);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchDashboardData();
+    setRefreshing(false);
+    toast.success('Dashboard data refreshed!');
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const totalUnits = rooms.length;
+  const occupiedCount = rooms.filter(r => r.status === 'Occupied').length;
+  const availableCount = rooms.filter(r => r.status === 'Available').length;
+  const maintenanceCount = rooms.filter(r => r.status === 'Maintenance').length;
+  const reservedCount = rooms.filter(r => r.status === 'Reserved').length;
+
+  const occupancyRate = totalUnits > 0 ? Math.round((occupiedCount / totalUnits) * 100) : 0;
+
+  const totalMonthlyRent = leases
+    .filter(l => l.status === 'Active')
+    .reduce((sum, l) => sum + l.rentAmount, 0);
+
+  const pendingBills = bills.filter(b => b.status === 'Pending');
+  const activeTasks = tasks.filter(t => t.status !== 'Completed');
+
+  return (
+    <div className="space-y-8 pb-10">
+
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-nike-hairline dark:border-nike-dark-card pb-4">
+        <div>
+          <h1 className="text-[28px] font-bold text-nike-ink dark:text-white">
+            {t('dashboard.title')}
+          </h1>
+          <p className="text-[14px] text-nike-mute dark:text-nike-stone mt-0.5">
+            {t('dashboard.sub')}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-white transition-all flex items-center gap-1.5 active:scale-95 shadow-2xs cursor-pointer"
+            title="Refresh Live Data"
+          >
+            <RotateCw className={`w-4 h-4 text-blue-600 dark:text-blue-400 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+          </button>
+          <Link
+            to="/admin/buildings"
+            className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-all flex items-center gap-1.5 shadow-xs"
+          >
+            <Building2 className="w-4 h-4" /> {t('admin.nav.buildings')}
+          </Link>
+          <Link
+            to="/admin/tenants"
+            className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all flex items-center gap-1.5 shadow-xs"
+          >
+            <PlusCircle className="w-4 h-4" /> {t('tnt.newLease')}
+          </Link>
+          <Link
+            to="/admin/utility-bills"
+            className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-white transition-all flex items-center gap-1.5"
+          >
+            <FileText className="w-4 h-4" /> {t('util.newBill')}
+          </Link>
+          <Link
+            to="/admin/maintenance"
+            className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-white transition-all flex items-center gap-1.5"
+          >
+            <Wrench className="w-4 h-4" /> {t('mnt.newTask')}
+          </Link>
+        </div>
+      </div>
+
+      {/* METRIC CARDS - ALL 5 CARDS IN A SINGLE ROW ON DESKTOP */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+
+        <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card p-5 rounded-2xl space-y-2 shadow-xs">
+          <div className="flex items-center justify-between text-nike-mute">
+            <span className="text-[12px] font-semibold uppercase tracking-wider">{t('dashboard.totalUnits')}</span>
+            <Building2 className="w-5 h-5 text-nike-ink dark:text-white" />
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[32px] font-bold text-nike-ink dark:text-white">{totalUnits}</span>
+            <span className="text-xs text-nike-stone font-medium">{language === 'th' ? 'ห้อง' : 'units'}</span>
+          </div>
+          <div className="w-full bg-nike-soft-cloud dark:bg-nike-dark-card h-2 rounded-full overflow-hidden">
+            <div className="bg-blue-600 h-full transition-all" style={{ width: `${occupancyRate}%` }}></div>
+          </div>
+          <span className="text-[12px] text-blue-600 dark:text-blue-400 font-medium block">
+            {t('dashboard.occupancyRate')}: {occupancyRate}%
+          </span>
+        </div>
+
+        <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card p-5 rounded-2xl space-y-2 shadow-xs">
+          <div className="flex items-center justify-between text-emerald-600">
+            <span className="text-[12px] font-semibold uppercase tracking-wider">{t('dashboard.availableUnits')}</span>
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[32px] font-bold text-emerald-600 dark:text-emerald-400">{availableCount}</span>
+            <span className="text-xs text-nike-stone font-medium">{language === 'th' ? 'ห้องว่าง' : 'units ready'}</span>
+          </div>
+          <span className="text-[12px] text-emerald-600 font-medium block">
+            {Math.round((availableCount / (totalUnits || 1)) * 100)}% {t('common.available')}
+          </span>
+        </div>
+
+        <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card p-5 rounded-2xl space-y-2 shadow-xs">
+          <div className="flex items-center justify-between text-blue-600">
+            <span className="text-[12px] font-semibold uppercase tracking-wider">{t('dashboard.occupiedUnits')}</span>
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[32px] font-bold text-blue-600 dark:text-blue-400">{occupiedCount}</span>
+            <span className="text-xs text-nike-stone font-medium">{language === 'th' ? 'ผู้เช่าพักอยู่' : 'active tenants'}</span>
+          </div>
+          <span className="text-[12px] text-blue-600 dark:text-blue-400 font-medium block">
+            {occupancyRate}% {t('common.occupied')}
+          </span>
+        </div>
+
+        <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card p-5 rounded-2xl space-y-2 shadow-xs">
+          <div className="flex items-center justify-between text-purple-600">
+            <span className="text-[12px] font-semibold uppercase tracking-wider">{t('dashboard.estimatedRevenue')}</span>
+            <DollarSign className="w-5 h-5" />
+          </div>
+          <span className="text-[24px] font-bold text-nike-ink dark:text-white block truncate">
+            {formatCurrency(totalMonthlyRent)}
+          </span>
+          <span className="text-[12px] text-purple-600 dark:text-purple-400 font-medium block">
+            {pendingBills.length} {language === 'th' ? 'ใบแจ้งหนี้ค้างชำระ' : 'pending bills'}
+          </span>
+        </div>
+
+        <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card p-5 rounded-2xl space-y-2 shadow-xs">
+          <div className="flex items-center justify-between text-rose-600">
+            <span className="text-[12px] font-semibold uppercase tracking-wider">{language === 'th' ? 'งานซ่อมค้างอยู่' : 'Active Maintenance'}</span>
+            <Wrench className="w-5 h-5" />
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[32px] font-bold text-rose-600 dark:text-rose-400">{activeTasks.length}</span>
+            <span className="text-xs text-nike-stone">{language === 'th' ? 'รายการ' : 'tasks pending'}</span>
+          </div>
+          <span className="text-[12px] text-nike-stone block">
+            {language === 'th' ? `ห้องกำลังซ่อม ${maintenanceCount} ห้อง` : `${maintenanceCount} units under maintenance`}
+          </span>
+        </div>
+
+      </div>
+
+      {/* 24-ROOM VISUAL FLOOR GRID */}
+      <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card rounded-2xl p-6 shadow-xs space-y-4">
+        <div className="flex items-center justify-between border-b border-nike-hairline dark:border-nike-dark-card pb-3">
+          <div>
+            <h2 className="text-xl font-bold text-nike-ink dark:text-white">
+              Apartment Floor Grid (Building & Floor Interactive Plan)
+            </h2>
+            <p className="text-xs text-nike-mute dark:text-nike-stone">
+              Click on a unit to view tenant info, meter readings, and maintenance history
+            </p>
+          </div>
+          <button
+            onClick={fetchDashboardData}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-nike-soft-cloud dark:bg-nike-dark-card hover:bg-nike-hairline text-nike-ink dark:text-white transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
+
+        <ApartmentFloorGrid rooms={rooms} onRefresh={fetchDashboardData} />
+      </div>
+
+      {/* LOWER WIDGETS */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        {/* SCHEDULED REMINDERS */}
+        <div className="lg:col-span-6 bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card rounded-2xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-nike-ink dark:text-white flex items-center gap-2">
+              <BellRing className="w-5 h-5 text-amber-500" />
+              Scheduled Maintenance Reminders
+            </h3>
+            <Link to="/admin/maintenance" className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+              View All
+            </Link>
+          </div>
+
+          <div className="space-y-3">
+            {reminders.length === 0 ? (
+              <p className="text-xs text-nike-mute dark:text-nike-stone py-4 text-center">{language === 'th' ? 'ไม่มีรายการแจ้งเตือนตามรอบเวลา' : 'No scheduled reminders'}</p>
+            ) : (
+              reminders.map((rem) => {
+                const dueDays = (() => {
+                  if (!rem.nextDueDate) return null;
+                  const due = new Date(rem.nextDueDate);
+                  const now = new Date();
+                  due.setHours(0, 0, 0, 0);
+                  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  const diffTime = due.getTime() - today.getTime();
+                  const diff = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                  if (diff < 0) return { label: language === 'th' ? `เกิน ${Math.abs(diff)} วัน` : `${Math.abs(diff)}d overdue`, cls: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' };
+                  if (diff === 0) return { label: language === 'th' ? 'ครบกำหนดวันนี้' : 'Due today', cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse' };
+                  if (diff <= 7) return { label: language === 'th' ? `อีก ${diff} วัน` : `In ${diff}d`, cls: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' };
+                  return { label: language === 'th' ? `อีก ${diff} วัน` : `In ${diff}d`, cls: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' };
+                })();
+
+                return (
+                  <div key={rem.id} className="p-3.5 bg-nike-soft-cloud dark:bg-nike-dark-surface rounded-xl border border-nike-hairline dark:border-nike-dark-card flex items-start justify-between gap-3 text-xs">
+                    <div className="space-y-1">
+                      <span className="font-semibold text-nike-ink dark:text-white block">
+                        {rem.title}
+                      </span>
+                      <span className="text-nike-stone block text-[11px]">
+                        {language === 'th' ? 'เป้าหมาย: ' : 'Target: '}<strong className="text-nike-ink dark:text-white">{rem.roomNumber || (language === 'th' ? 'พื้นที่ส่วนกลาง' : 'Building Common')}</strong> | {language === 'th' ? 'รอบ: ' : 'Cycle: '}{rem.frequency}
+                      </span>
+                    </div>
+                    <div className="text-right flex-shrink-0 space-y-1">
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 block font-mono">
+                        {rem.nextDueDate}
+                      </span>
+                      {dueDays && (
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold block ${dueDays.cls}`}>
+                          {dueDays.label}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* ACTIVE MAINTENANCE TASKS */}
+        <div className="lg:col-span-6 bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card rounded-2xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-nike-ink dark:text-white flex items-center gap-2">
+              <Wrench className="w-5 h-5 text-rose-500" />
+              Maintenance Queue
+            </h3>
+            <Link to="/admin/maintenance" className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+              All Tasks
+            </Link>
+          </div>
+
+          <div className="space-y-3">
+            {activeTasks.length === 0 ? (
+              <p className="text-xs text-nike-mute dark:text-nike-stone py-4 text-center">No pending maintenance tasks</p>
+            ) : (
+              activeTasks.slice(0, 3).map((task) => (
+                <div key={task.id} className="p-3.5 bg-nike-soft-cloud dark:bg-nike-dark-surface rounded-xl border border-nike-hairline dark:border-nike-dark-card flex items-start justify-between gap-3 text-xs">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-nike-ink dark:text-white">
+                        Unit {task.roomNumber}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-500/10 text-rose-600 border border-rose-500/20">
+                        {task.category}
+                      </span>
+                    </div>
+                    <p className="text-nike-mute dark:text-nike-stone line-clamp-1">{task.description}</p>
+                    <span className="text-[11px] text-nike-stone block">Assigned: {task.assignedWorker}</span>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-600 border border-blue-500/20 whitespace-nowrap">
+                    {task.status}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  );
+};
