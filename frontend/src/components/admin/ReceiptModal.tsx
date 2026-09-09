@@ -21,8 +21,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ bill, onClose }) => 
     window.print();
   };
 
-  const waterUnits = Math.max(0, bill.currWaterMeter - bill.prevWaterMeter);
-  const electricUnits = Math.max(0, bill.currElectricMeter - bill.prevElectricMeter);
+  const waterUnits = Math.max(0, (bill.currWaterMeter || 0) - (bill.prevWaterMeter || 0));
+  const electricUnits = Math.max(0, (bill.currElectricMeter || 0) - (bill.prevElectricMeter || 0));
 
   return (
     <div
@@ -98,7 +98,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ bill, onClose }) => 
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Date Issued:</span>
-              <span className="font-bold text-slate-900 print:text-black text-xs">{formatDate(bill.createdAt)}</span>
+              <span className="font-bold text-slate-900 print:text-black text-xs">{formatDate(bill.createdAt || bill.dueDate)}</span>
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Payment Status:</span>
@@ -141,9 +141,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ bill, onClose }) => 
                 <td className="border border-slate-300 p-2 print:py-1.5 text-center">{bill.currElectricMeter}</td>
                 <td className="border border-slate-300 p-2 print:py-1.5 text-center font-extrabold text-amber-600 print:text-black">{electricUnits} units</td>
                 <td className="border border-slate-300 p-2 print:py-1.5 text-right">{bill.electricRate} THB</td>
-                <td className="border border-slate-300 p-2 print:py-1.5 text-right font-extrabold">{formatCurrency(bill.electricAmount)}</td>
+                <td className="border border-slate-300 p-2 print:py-1.5 text-right font-extrabold">{formatCurrency(bill.electricAmount || bill.electricityAmount)}</td>
               </tr>
-              {bill.commonFee > 0 && (
+              {(bill.commonFee || 0) > 0 && (
                 <tr>
                   <td className="border border-slate-300 p-2 print:py-1.5 font-semibold">Building Common Maintenance Fee</td>
                   <td className="border border-slate-300 p-2 print:py-1.5 text-center text-slate-400">-</td>

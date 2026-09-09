@@ -498,7 +498,7 @@ export const ResidentMaintenancePage: React.FC = () => {
                     </h3>
                   </div>
                   <div className="flex items-center gap-2">
-                    {getPriorityBadge(task.priority)}
+                    {getPriorityBadge(task.priority || 'Medium')}
                     {getStatusBadge(task.status)}
                   </div>
                 </div>

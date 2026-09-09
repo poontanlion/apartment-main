@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { UtilityBill, Room, Lease } from '../../types';
 import { getUtilityBills, saveUtilityBill, updateBillStatus, getRooms, getLeases } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
-import { FileText, Plus, Printer, Droplets, Zap, Search } from 'lucide-react';
+import { FileText, Plus, Printer, Droplets, Zap, Search, Building2 } from 'lucide-react';
 import { ReceiptModal } from '../../components/admin/ReceiptModal';
 import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'sonner';
@@ -26,12 +27,16 @@ const YEAR_OPTIONS = [2024, 2025, 2026, 2027, 2028, 2029, 2030];
 
 export const UtilityReceiptManagement: React.FC = () => {
   const { t, language } = useLanguage();
+  const [searchParams] = useSearchParams();
+  const initialBuildingId = searchParams.get('buildingId') || 'All';
+
   const [bills, setBills] = useState<UtilityBill[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [leases, setLeases] = useState<Lease[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Paid'>('All');
   const [monthFilter, setMonthFilter] = useState<string>('All');
+  const [buildingFilter, setBuildingFilter] = useState<string>(initialBuildingId);
 
   const [showBillModal, setShowBillModal] = useState(false);
   const [selectedBillForReceipt, setSelectedBillForReceipt] = useState<UtilityBill | null>(null);
@@ -146,7 +151,16 @@ export const UtilityReceiptManagement: React.FC = () => {
     const matchesSearch = (b.roomNumber || '').includes(search) || (b.tenantName || '').toLowerCase().includes(search.toLowerCase()) || (b.invoiceNo || '').includes(search);
     const matchesStatus = statusFilter === 'All' || b.status === statusFilter;
     const matchesMonth = monthFilter === 'All' || b.billingMonth === monthFilter;
-    return matchesSearch && matchesStatus && matchesMonth;
+    
+    let matchesBuilding = true;
+    if (buildingFilter !== 'All') {
+      const room = rooms.find(r => r.id === b.roomId || r.roomNumber === b.roomNumber);
+      const isBldB = (room && (room.buildingId === 'bld-2' || (room.roomNumber && room.roomNumber.toUpperCase().startsWith('B')))) || (b.roomNumber && b.roomNumber.toUpperCase().startsWith('B'));
+      if (buildingFilter === 'bld-2') matchesBuilding = Boolean(isBldB);
+      else if (buildingFilter === 'bld-1') matchesBuilding = !isBldB;
+    }
+
+    return matchesSearch && matchesStatus && matchesMonth && matchesBuilding;
   });
 
   return (
@@ -203,6 +217,17 @@ export const UtilityReceiptManagement: React.FC = () => {
           </h3>
 
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            {/* BUILDING FILTER DROPDOWN */}
+            <select
+              value={buildingFilter}
+              onChange={(e) => setBuildingFilter(e.target.value)}
+              className="px-3 py-1.5 text-xs rounded-xl bg-nike-soft-cloud dark:bg-nike-dark-surface border border-nike-hairline dark:border-nike-dark-card text-nike-ink dark:text-white font-semibold cursor-pointer focus:outline-none"
+            >
+              <option value="All">{language === 'th' ? 'อาคารทั้งหมด (All Buildings)' : 'All Buildings'}</option>
+              <option value="bld-1">{language === 'th' ? 'อาคาร A (Victory Tower A)' : 'Building A (Victory Tower A)'}</option>
+              <option value="bld-2">{language === 'th' ? 'อาคาร B (Victory Residence B)' : 'Building B (Victory Residence B)'}</option>
+            </select>
+
             {/* MONTH FILTER DROPDOWN */}
             <select
               value={monthFilter}
@@ -264,8 +289,8 @@ export const UtilityReceiptManagement: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-nike-hairline/60 dark:divide-nike-dark-card/60">
               {filteredBills.map((bill) => {
-                const wUnits = Math.max(0, bill.currWaterMeter - bill.prevWaterMeter);
-                const eUnits = Math.max(0, bill.currElectricMeter - bill.prevElectricMeter);
+                const wUnits = Math.max(0, (bill.currWaterMeter || 0) - (bill.prevWaterMeter || 0));
+                const eUnits = Math.max(0, (bill.currElectricMeter || 0) - (bill.prevElectricMeter || 0));
                 return (
                   <tr key={bill.id} className="hover:bg-nike-soft-cloud/50 dark:hover:bg-nike-dark-card/30">
                     <td className="p-3">

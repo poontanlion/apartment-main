@@ -89,7 +89,7 @@ export const BuildingManagement: React.FC = () => {
 
   const filteredBuildings = buildings.filter(b =>
     b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    b.code.toLowerCase().includes(searchTerm.toLowerCase())
+    (b.code || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Helper to calculate stats per building
@@ -190,7 +190,7 @@ export const BuildingManagement: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {filteredBuildings.map((building) => {
-            const stats = getBuildingStats(building.id, building.code);
+            const stats = getBuildingStats(building.id, building.code || '');
             const bName = language === 'en' ? (building.name.includes('อาคาร A') ? 'Building A (Victory Tower A)' : building.name.includes('อาคาร B') ? 'Building B (Victory Residence B)' : building.name) : building.name;
             return (
               <div
