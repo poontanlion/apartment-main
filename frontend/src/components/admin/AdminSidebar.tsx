@@ -43,17 +43,16 @@ export const AdminSidebar: React.FC = () => {
     };
   }, [location.pathname]);
 
-  interface NavItem {
-    name: string;
-    path: string;
-    icon: any;
-    badge?: number;
-  }
-
-  const navItems: NavItem[] = [
+  const navItems = [
     { name: t('admin.nav.dashboard'), path: '/admin/dashboard', icon: LayoutDashboard },
     { name: t('admin.nav.buildings'), path: '/admin/buildings', icon: Building2 },
+    { name: t('admin.nav.tenants'), path: '/admin/tenants', icon: FileSignature },
+    { name: t('admin.nav.utilityBills'), path: '/admin/utility-bills', icon: FileText },
+    { name: t('admin.nav.maintenance'), path: '/admin/maintenance', icon: Wrench },
     { name: t('admin.nav.rooms'), path: '/admin/rooms', icon: BedDouble },
+    { name: t('admin.nav.bookings'), path: '/admin/bookings', icon: CalendarCheck, badge: pendingBookingCount },
+    { name: t('admin.nav.activityLog'), path: '/admin/activity-log', icon: History },
+    { name: t('admin.nav.notifications'), path: '/admin/notifications', icon: Bell, badge: unreadNotifCount },
   ];
 
   const isActive = (path: string) => location.pathname === path;
