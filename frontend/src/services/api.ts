@@ -5,47 +5,6 @@ import {
 
 const API_BASE = '/api';
 
-// Initial Mock Data for Local Fallback
-const MOCK_BUILDINGS: Building[] = [
-  {
-    id: 'bld-1',
-    name: 'อาคาร A (Victory Tower A)',
-    code: 'A',
-    floors: 2,
-    totalRooms: 24,
-    address: '123/1 ถนนสุขุมวิท กรุงเทพฯ',
-    coverImage: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
-    createdAt: '2026-01-01'
-  },
-  {
-    id: 'bld-2',
-    name: 'อาคาร B (Victory Residence B)',
-    code: 'B',
-    floors: 2,
-    totalRooms: 12,
-    address: '123/2 ถนนสุขุมวิท กรุงเทพฯ',
-    coverImage: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?auto=format&fit=crop&w=800&q=80',
-    createdAt: '2026-02-15'
-  }
-];
-
-function getStored<T>(key: string, defaultVal: T): T {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultVal;
-  } catch {
-    return defaultVal;
-  }
-}
-
-function setStored<T>(key: string, val: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(val));
-  } catch (e) {
-    console.error(e);
-  }
-}
-
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
@@ -65,59 +24,28 @@ export const getBuildings = async (): Promise<Building[]> => {
   try {
     return await fetchJson<Building[]>(`${API_BASE}/buildings`);
   } catch {
-    return getStored<Building[]>('apartment_buildings', MOCK_BUILDINGS);
+    return [];
   }
 };
 
 export const saveBuilding = async (buildingData: Partial<Building>): Promise<Building> => {
-  try {
-    if (buildingData.id) {
-      return await fetchJson<Building>(`${API_BASE}/buildings/${buildingData.id}`, {
-        method: 'PUT',
-        body: JSON.stringify(buildingData),
-      });
-    }
-    return await fetchJson<Building>(`${API_BASE}/buildings`, {
-      method: 'POST',
+  if (buildingData.id) {
+    return fetchJson<Building>(`${API_BASE}/buildings/${buildingData.id}`, {
+      method: 'PUT',
       body: JSON.stringify(buildingData),
     });
-  } catch {
-    const list = getStored<Building[]>('apartment_buildings', MOCK_BUILDINGS);
-    let updated: Building;
-    if (buildingData.id) {
-      const idx = list.findIndex(b => b.id === buildingData.id);
-      updated = { ...list[idx], ...buildingData } as Building;
-      if (idx !== -1) list[idx] = updated;
-    } else {
-      updated = {
-        id: `bld-${Date.now()}`,
-        name: buildingData.name || 'อาคารใหม่',
-        code: buildingData.code || 'C',
-        floors: buildingData.floors || 5,
-        totalRooms: buildingData.totalRooms || 20,
-        description: buildingData.description || '',
-        coverImage: buildingData.coverImage || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      list.push(updated);
-    }
-    setStored('apartment_buildings', list);
-    return updated;
   }
+  return fetchJson<Building>(`${API_BASE}/buildings`, {
+    method: 'POST',
+    body: JSON.stringify(buildingData),
+  });
 };
 
 export const deleteBuilding = async (id: string): Promise<void> => {
-  try {
-    const res = await fetch(`${API_BASE}/buildings/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to delete building on server');
-  } catch (err) {
-    console.warn('Backend delete failed, removing locally:', err);
-  } finally {
-    const list = getStored<Building[]>('apartment_buildings', MOCK_BUILDINGS);
-    const filtered = list.filter(b => b.id !== id);
-    setStored('apartment_buildings', filtered);
-  }
+  const res = await fetch(`${API_BASE}/buildings/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete building');
 };
+
 
 // ----------------------------------------------------
 // ROOMS / APARTMENT UNITS API
@@ -461,10 +389,7 @@ export const markNotificationAsRead = async (id: string): Promise<AppNotificatio
       method: 'PUT',
     });
   } catch (err) {
-    console.warn('Backend mark-read failed, updating locally:', err);
-    const list = getStored<AppNotification[]>('apartment_notifications', []);
-    const updated = list.map(n => n.id === id ? { ...n, isRead: true } : n);
-    setStored('apartment_notifications', updated);
+    console.warn('Backend mark-read failed:', err);
   }
 };
 
