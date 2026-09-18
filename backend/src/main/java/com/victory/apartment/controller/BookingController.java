@@ -35,8 +35,14 @@ public class BookingController {
     }
 
     @GetMapping
-    public List<Booking> getAll() {
-        return repo.findAllByOrderByCreatedAtDesc();
+    public List<Booking> getAll(@RequestParam(required = false) String buildingId) {
+        List<Booking> bookings = repo.findAllByOrderByCreatedAtDesc();
+        if (buildingId != null && !buildingId.isEmpty() && !"All".equalsIgnoreCase(buildingId)) {
+            List<String> roomIds = roomRepo.findByBuildingIdOrderByRoomNumberAsc(buildingId)
+                    .stream().map(com.victory.apartment.model.Room::getId).toList();
+            return bookings.stream().filter(b -> b.getRoomId() != null && roomIds.contains(b.getRoomId())).toList();
+        }
+        return bookings;
     }
 
     @GetMapping("/user/{email}")

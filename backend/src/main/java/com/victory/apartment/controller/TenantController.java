@@ -16,15 +16,23 @@ public class TenantController {
 
     private final TenantRepository repo;
     private final ActivityLogService logService;
+    private final com.victory.apartment.repository.RoomRepository roomRepo;
 
-    public TenantController(TenantRepository repo, ActivityLogService logService) {
+    public TenantController(TenantRepository repo, ActivityLogService logService, com.victory.apartment.repository.RoomRepository roomRepo) {
         this.repo = repo;
         this.logService = logService;
+        this.roomRepo = roomRepo;
     }
 
     @GetMapping
-    public List<Tenant> getAll() {
-        return repo.findAll();
+    public List<Tenant> getAll(@RequestParam(required = false) String buildingId) {
+        List<Tenant> tenants = repo.findAll();
+        if (buildingId != null && !buildingId.isEmpty() && !"All".equalsIgnoreCase(buildingId)) {
+            List<String> roomIds = roomRepo.findByBuildingIdOrderByRoomNumberAsc(buildingId)
+                    .stream().map(com.victory.apartment.model.Room::getId).toList();
+            return tenants.stream().filter(t -> t.getUnitId() != null && roomIds.contains(t.getUnitId())).toList();
+        }
+        return tenants;
     }
 
     @PostMapping

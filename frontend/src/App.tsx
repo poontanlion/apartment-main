@@ -18,6 +18,7 @@ import { Register } from './pages/public/Register';
 import { ProfilePage } from './pages/public/ProfilePage';
 import { BookingPage } from './pages/public/BookingPage';
 import { CheckBookingPage } from './pages/public/CheckBookingPage';
+import { RoomListingPage } from './pages/public/RoomListingPage';
 import { MyApartmentPage } from './pages/public/MyApartmentPage';
 import { PaymentPage } from './pages/public/PaymentPage';
 import { ResidentMaintenancePage } from './pages/public/ResidentMaintenancePage';
@@ -113,8 +114,7 @@ export const AppContent: React.FC = () => {
         <Route path="/profile" element={<PublicLayout><ProfilePage /></PublicLayout>} />
 
         {/* ROOMS & BOOKING ROUTES */}
-        <Route path="/rooms" element={<PublicLayout><CheckBookingPage /></PublicLayout>} />
-        <Route path="/rooms/:id" element={<PublicLayout><CheckBookingPage /></PublicLayout>} />
+        <Route path="/rooms" element={<PublicLayout><RoomListingPage /></PublicLayout>} />
         <Route path="/booking/:roomId" element={<PublicLayout><BookingPage /></PublicLayout>} />
         <Route path="/payment/:bookingId" element={<PublicLayout><PaymentPage /></PublicLayout>} />
         <Route path="/check-booking" element={<PublicLayout><CheckBookingPage /></PublicLayout>} />

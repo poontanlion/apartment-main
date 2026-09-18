@@ -43,7 +43,7 @@ public class MaintenanceController {
 
     // === MAINTENANCE TASKS ===
     @GetMapping("/maintenance-tasks")
-    public List<MaintenanceTask> getAllTasks() {
+    public List<MaintenanceTask> getAllTasks(@RequestParam(required = false) String buildingId) {
         List<MaintenanceTask> tasks = taskRepo.findAllByOrderByCreatedAtDesc();
         for (MaintenanceTask t : tasks) {
             if (t.getRoomNumber() != null && !t.getRoomNumber().isEmpty()) {
@@ -56,6 +56,11 @@ public class MaintenanceController {
                     }
                 });
             }
+        }
+        if (buildingId != null && !buildingId.isEmpty() && !"All".equalsIgnoreCase(buildingId)) {
+            List<String> roomIds = roomRepo.findByBuildingIdOrderByRoomNumberAsc(buildingId)
+                    .stream().map(Room::getId).toList();
+            return tasks.stream().filter(t -> t.getRoomId() != null && roomIds.contains(t.getRoomId())).toList();
         }
         return tasks;
     }
