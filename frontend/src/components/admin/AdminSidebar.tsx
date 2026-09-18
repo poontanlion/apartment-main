@@ -172,7 +172,7 @@ export const AdminSidebar: React.FC = () => {
 
             <div className="pt-4 border-t border-neutral-800 space-y-2">
               <Link
-                to="/"
+                to="/rooms"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center justify-center gap-2 w-full bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold py-3 rounded-full uppercase tracking-wider transition-colors"
               >
@@ -266,7 +266,7 @@ export const AdminSidebar: React.FC = () => {
             </button>
 
             <Link
-              to="/"
+              to="/rooms"
               className="flex items-center justify-center gap-2 w-full bg-neutral-800/80 hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider py-2.5 rounded-full transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> {t('admin.nav.backToPublic')}
