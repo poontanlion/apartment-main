@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { MaintenanceTask, SupplyItem, MaintenanceLog, ScheduledReminder, Room } from '../../types';
 import {
   getMaintenanceTasks, saveMaintenanceTask, deleteMaintenanceTask,
@@ -14,14 +15,27 @@ import { toast } from 'sonner';
 
 export const MaintenanceManagement: React.FC = () => {
   const { t, language } = useLanguage();
+  const [searchParams] = useSearchParams();
+  const initialBuildingId = searchParams.get('buildingId') || 'All';
+
   const [activeTab, setActiveTab] = useState<'tasks' | 'supplies' | 'logs' | 'reminders'>('tasks');
   const [occupancyFilter, setOccupancyFilter] = useState<'All' | 'Occupied' | 'Vacant/Common'>('All');
+  const [buildingFilter, setBuildingFilter] = useState<string>(initialBuildingId);
   const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
   const [supplies, setSupplies] = useState<SupplyItem[]>([]);
   const [logs, setLogs] = useState<MaintenanceLog[]>([]);
   const [reminders, setReminders] = useState<ScheduledReminder[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [search, setSearch] = useState('');
+
+  const isRoomInBuilding = (roomId?: string, roomNumber?: string, targetBldId: string = buildingFilter) => {
+    if (targetBldId === 'All') return true;
+    const rm = rooms.find(r => (roomId && r.id === roomId) || (roomNumber && r.roomNumber === roomNumber));
+    const isBldB = (rm && (rm.buildingId === 'bld-2' || (rm.roomNumber && rm.roomNumber.toUpperCase().startsWith('B')))) || (roomNumber && roomNumber.toUpperCase().startsWith('B'));
+    if (targetBldId === 'bld-2') return Boolean(isBldB);
+    if (targetBldId === 'bld-1') return !isBldB;
+    return true;
+  };
 
   // Modals
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -102,7 +116,7 @@ export const MaintenanceManagement: React.FC = () => {
           const expectedTitle = language === 'th' ? `[เตือนรอบบำรุงรักษา] ${rem.title}` : `[Maintenance Due] ${rem.title}`;
           const alreadyNotified = existingNotifs.some(n =>
             (n.title.includes(rem.title) || n.message?.includes(rem.title)) &&
-            n.message?.includes(rem.nextDueDate)
+            n.message?.includes(rem.nextDueDate || '')
           );
 
           if (!alreadyNotified) {
@@ -168,20 +182,20 @@ export const MaintenanceManagement: React.FC = () => {
           supplyId: target.id,
           name: target.name,
           quantity: qty,
-          unitCost: target.unitCost,
+          unitCost: target.unitCost || 0,
           unitName: target.unitName || 'ชิ้น',
         }];
       }
 
       // Compute costs
-      const suppliesCost = updated.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
-      const labor = taskFormData.laborCost || 0;
-      const suppliesSummary = updated.map(item => `${item.name} x${item.quantity} (฿${item.quantity * item.unitCost})`).join(', ');
+      const suppliesCost = updated.reduce((sum, item) => sum + (item.quantity * (item.unitCost || 0)), 0);
+      const laborCost = taskFormData.laborCost || 0;
+      const suppliesSummary = updated.map(item => `${item.name} x${item.quantity} (฿${item.quantity * (item.unitCost || 0)})`).join(', ');
 
       setTaskFormData(f => ({
         ...f,
         suppliesUsed: suppliesSummary,
-        totalCost: labor + suppliesCost,
+        totalCost: laborCost + suppliesCost,
       }));
 
       return updated;
@@ -346,6 +360,16 @@ export const MaintenanceManagement: React.FC = () => {
             {t('mnt.sub')}
           </p>
         </div>
+
+        <select
+          value={buildingFilter}
+          onChange={(e) => setBuildingFilter(e.target.value)}
+          className="px-3 py-2 text-xs rounded-xl bg-nike-soft-cloud dark:bg-nike-dark-surface border border-nike-hairline dark:border-nike-dark-card text-nike-ink dark:text-white font-semibold cursor-pointer focus:outline-none self-start md:self-auto shadow-2xs"
+        >
+          <option value="All">{language === 'th' ? 'อาคารทั้งหมด (All Buildings)' : 'All Buildings'}</option>
+          <option value="bld-1">{language === 'th' ? 'อาคาร A (Victory Tower A)' : 'Building A (Victory Tower A)'}</option>
+          <option value="bld-2">{language === 'th' ? 'อาคาร B (Victory Residence B)' : 'Building B (Victory Residence B)'}</option>
+        </select>
       </div>
 
       {/* NAVIGATION TABS */}
@@ -404,7 +428,7 @@ export const MaintenanceManagement: React.FC = () => {
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                   }`}
                 >
-                  {t('common.all')} ({tasks.length})
+                  {t('common.all')} ({tasks.filter(t => isRoomInBuilding(t.roomId, t.roomNumber)).length})
                 </button>
                 <button
                   onClick={() => setOccupancyFilter('Occupied')}
@@ -414,7 +438,7 @@ export const MaintenanceManagement: React.FC = () => {
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                   }`}
                 >
-                  {language === 'th' ? 'ห้องมีคนเช่า' : 'Occupied Units'} ({tasks.filter(t => getTaskOccupancy(t) === 'Occupied').length})
+                  {language === 'th' ? 'ห้องมีคนเช่า' : 'Occupied Units'} ({tasks.filter(t => isRoomInBuilding(t.roomId, t.roomNumber) && getTaskOccupancy(t) === 'Occupied').length})
                 </button>
                 <button
                   onClick={() => setOccupancyFilter('Vacant/Common')}
@@ -424,7 +448,7 @@ export const MaintenanceManagement: React.FC = () => {
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                   }`}
                 >
-                  {language === 'th' ? 'ห้องว่าง' : 'Vacant / Common'} ({tasks.filter(t => getTaskOccupancy(t) === 'Vacant/Common').length})
+                  {language === 'th' ? 'ห้องว่าง' : 'Vacant / Common'} ({tasks.filter(t => isRoomInBuilding(t.roomId, t.roomNumber) && getTaskOccupancy(t) === 'Vacant/Common').length})
                 </button>
               </div>
             </div>
@@ -470,6 +494,7 @@ export const MaintenanceManagement: React.FC = () => {
               <tbody className="divide-y divide-nike-hairline/60 dark:divide-nike-dark-card/60">
                 {tasks
                   .filter(task => {
+                    if (!isRoomInBuilding(task.roomId, task.roomNumber)) return false;
                     if (occupancyFilter === 'Occupied') return getTaskOccupancy(task) === 'Occupied';
                     if (occupancyFilter === 'Vacant/Common') return getTaskOccupancy(task) === 'Vacant/Common';
                     return true;
@@ -699,7 +724,10 @@ export const MaintenanceManagement: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-nike-hairline/60 dark:divide-nike-dark-card/60">
                 {logs
-                  .filter(log => selectedRoomForLogs === 'All' ? true : (log.roomNumber === selectedRoomForLogs || log.roomId === selectedRoomForLogs))
+                  .filter(log => {
+                    if (!isRoomInBuilding(log.roomId, log.roomNumber)) return false;
+                    return selectedRoomForLogs === 'All' ? true : (log.roomNumber === selectedRoomForLogs || log.roomId === selectedRoomForLogs);
+                  })
                   .map(log => (
                   <tr key={log.id} className="hover:bg-nike-soft-cloud/50 dark:hover:bg-nike-dark-card/30">
                     <td className="p-3 text-nike-mute dark:text-nike-stone whitespace-nowrap">{log.date}</td>
@@ -766,7 +794,9 @@ export const MaintenanceManagement: React.FC = () => {
           </div>
 
           <div className="space-y-3">
-            {reminders.map(rem => {
+            {reminders
+              .filter(rem => isRoomInBuilding(rem.roomId, rem.roomNumber))
+              .map(rem => {
               const dueInfo = (() => {
                 if (!rem.nextDueDate) return null;
                 const due = new Date(rem.nextDueDate);

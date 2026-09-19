@@ -1,30 +1,32 @@
-# Multi-stage Dockerfile for Victory Apartment Management Backend (Spring Boot 3.2.5)
+﻿# ============================================================
+# Stage 1: Build - Maven + OpenJDK 17
+# ============================================================
+FROM maven:3.9-eclipse-temurin-17 AS builder
 
-# Stage 1: Build JAR using Maven & Java 17
-FROM maven:3.9.6-eclipse-temurin-17-alpine AS builder
 WORKDIR /app
 
-# Copy pom.xml and source code
+# Copy pom.xml and download dependencies first (layer caching)
 COPY pom.xml .
+RUN mvn dependency:go-offline -q
+
+# Copy source code and build the jar
 COPY src ./src
+RUN mvn clean package -DskipTests -q
 
-# Build production JAR (skipping test execution during docker build)
-RUN mvn clean package -DskipTests -B
-
-# Stage 2: Lightweight JRE Runtime
+# ============================================================
+# Stage 2: Run - JRE 17 Alpine (lightweight)
+# ============================================================
 FROM eclipse-temurin:17-jre-alpine
-RUN apk add --no-cache curl
+
 WORKDIR /app
 
-# Copy built JAR from builder stage
+# Create a non-root user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+# Copy only the built jar from the builder stage
 COPY --from=builder /app/target/*.jar app.jar
 
-# Expose Spring Boot default port
 EXPOSE 8080
 
-# Environment defaults
-ENV SPRING_PROFILES_ACTIVE=prod
-ENV SERVER_PORT=8080
-
-# Run Spring Boot application
 ENTRYPOINT ["java", "-jar", "app.jar"]

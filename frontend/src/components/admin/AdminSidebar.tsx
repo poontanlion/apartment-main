@@ -43,17 +43,16 @@ export const AdminSidebar: React.FC = () => {
     };
   }, [location.pathname]);
 
-  interface NavItem {
-    name: string;
-    path: string;
-    icon: any;
-    badge?: number;
-  }
-
-  const navItems: NavItem[] = [
+  const navItems = [
     { name: t('admin.nav.dashboard'), path: '/admin/dashboard', icon: LayoutDashboard },
     { name: t('admin.nav.buildings'), path: '/admin/buildings', icon: Building2 },
+    { name: t('admin.nav.tenants'), path: '/admin/tenants', icon: FileSignature },
+    { name: t('admin.nav.utilityBills'), path: '/admin/utility-bills', icon: FileText },
+    { name: t('admin.nav.maintenance'), path: '/admin/maintenance', icon: Wrench },
     { name: t('admin.nav.rooms'), path: '/admin/rooms', icon: BedDouble },
+    { name: t('admin.nav.bookings'), path: '/admin/bookings', icon: CalendarCheck, badge: pendingBookingCount },
+    { name: t('admin.nav.activityLog'), path: '/admin/activity-log', icon: History },
+    { name: t('admin.nav.notifications'), path: '/admin/notifications', icon: Bell, badge: unreadNotifCount },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -173,7 +172,7 @@ export const AdminSidebar: React.FC = () => {
 
             <div className="pt-4 border-t border-neutral-800 space-y-2">
               <Link
-                to="/"
+                to="/rooms"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center justify-center gap-2 w-full bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold py-3 rounded-full uppercase tracking-wider transition-colors"
               >
@@ -267,7 +266,7 @@ export const AdminSidebar: React.FC = () => {
             </button>
 
             <Link
-              to="/"
+              to="/rooms"
               className="flex items-center justify-center gap-2 w-full bg-neutral-800/80 hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider py-2.5 rounded-full transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> {t('admin.nav.backToPublic')}

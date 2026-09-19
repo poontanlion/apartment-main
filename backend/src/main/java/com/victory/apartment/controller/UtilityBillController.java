@@ -28,8 +28,14 @@ public class UtilityBillController {
     }
 
     @GetMapping
-    public List<UtilityBill> getAll() {
-        return repo.findAllByOrderByCreatedAtDesc();
+    public List<UtilityBill> getAll(@RequestParam(required = false) String buildingId) {
+        List<UtilityBill> bills = repo.findAllByOrderByCreatedAtDesc();
+        if (buildingId != null && !buildingId.isEmpty() && !"All".equalsIgnoreCase(buildingId)) {
+            List<String> roomIds = roomRepo.findByBuildingIdOrderByRoomNumberAsc(buildingId)
+                    .stream().map(Room::getId).toList();
+            return bills.stream().filter(b -> b.getRoomId() != null && roomIds.contains(b.getRoomId())).toList();
+        }
+        return bills;
     }
 
     @PostMapping
