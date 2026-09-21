@@ -31,8 +31,6 @@ import { UtilityReceiptManagement } from './pages/admin/UtilityReceiptManagement
 import { MaintenanceManagement } from './pages/admin/MaintenanceManagement';
 import { ActivityLogList } from './pages/admin/ActivityLogList';
 import { NotificationCenter } from './pages/admin/NotificationCenter';
-import { TenantManagement } from './pages/admin/TenantManagement';
-import { BookingManagement } from './pages/admin/BookingManagement';
 
 // Protected Admin Route Guard
 const ProtectedAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -50,7 +48,7 @@ const ProtectedAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children
 const RootRedirect: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   if (!isAuthenticated) {
-    return <Navigate to="/rooms" replace />;
+    return <Navigate to="/login" replace />;
   }
   if (user?.role === 'admin') {
     return <Navigate to="/admin/dashboard" replace />;
@@ -131,8 +129,6 @@ export const AppContent: React.FC = () => {
         <Route path="/admin/dashboard" element={<ProtectedAdminRoute><AdminLayout><AdminDashboard /></AdminLayout></ProtectedAdminRoute>} />
         <Route path="/admin/buildings" element={<ProtectedAdminRoute><AdminLayout><BuildingManagement /></AdminLayout></ProtectedAdminRoute>} />
         <Route path="/admin/rooms" element={<ProtectedAdminRoute><AdminLayout><RoomManagement /></AdminLayout></ProtectedAdminRoute>} />
-        <Route path="/admin/tenants" element={<ProtectedAdminRoute><AdminLayout><TenantManagement /></AdminLayout></ProtectedAdminRoute>} />
-        <Route path="/admin/bookings" element={<ProtectedAdminRoute><AdminLayout><BookingManagement /></AdminLayout></ProtectedAdminRoute>} />
         <Route path="/admin/utility-bills" element={<ProtectedAdminRoute><AdminLayout><UtilityReceiptManagement /></AdminLayout></ProtectedAdminRoute>} />
         <Route path="/admin/maintenance" element={<ProtectedAdminRoute><AdminLayout><MaintenanceManagement /></AdminLayout></ProtectedAdminRoute>} />
         <Route path="/admin/activity-log" element={<ProtectedAdminRoute><AdminLayout><ActivityLogList /></AdminLayout></ProtectedAdminRoute>} />
