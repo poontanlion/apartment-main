@@ -410,7 +410,7 @@ export const CheckBookingPage: React.FC = () => {
                     {/* VIEW ROOM DETAILS (AVAILABLE FOR ALL) */}
                     {(booking.roomId || matchedRoom?.id) && (
                       <Link
-                        to={`/rooms/${booking.roomId || matchedRoom?.id}`}
+                        to="/rooms"
                         className="px-4 py-2 rounded-full text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition-all active:scale-95 shadow-xs flex items-center gap-1.5 cursor-pointer"
                       >
                         <DoorOpen className="w-3.5 h-3.5" /> {t('track.viewRoomBtn')}

@@ -94,7 +94,7 @@ export const BookingPage: React.FC = () => {
     <div className="max-w-[840px] mx-auto px-6 py-12 space-y-8">
       
       {/* BREADCRUMB */}
-      <Link to={`/rooms/${room.id}`} className="inline-flex items-center gap-2 text-xs font-semibold text-nike-mute dark:text-nike-stone hover:text-nike-ink dark:hover:text-white transition-colors">
+      <Link to="/rooms" className="inline-flex items-center gap-2 text-xs font-semibold text-nike-mute dark:text-nike-stone hover:text-nike-ink dark:hover:text-white transition-colors">
         <ArrowLeft className="w-4 h-4" /> {t('room.backToUnits')}
       </Link>
 
