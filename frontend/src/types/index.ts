@@ -1,172 +1,193 @@
-export type UserRole = 'admin' | 'customer' | 'resident';
+export type UserRole = 'admin' | 'customer';
 
 export interface User {
-  id: string | number;
+  id: string;
   fullname: string;
   email: string;
+  password?: string;
   phone?: string;
+  avatar?: string;
   role: UserRole;
+  created_at?: string;
 }
 
-export type RoomType = 'Standard' | 'Deluxe' | 'Suite' | string;
-export type RoomStatus = 'Available' | 'Occupied' | 'Maintenance' | 'Reserved' | string;
-
-export interface Room {
-  id: string;
-  roomNumber: string;
-  roomName?: string;
-  buildingId?: string;
-  buildingName?: string;
-  floor?: number;
-  type: RoomType;
-  roomType?: string;
-  price: number;
-  capacity?: number;
-  status: RoomStatus;
-  amenities?: string[] | string;
-  description?: string;
-  images?: string[];
-  coverImage?: string;
-  sizeSqm?: number;
-  bedType?: string;
-  currentTenantId?: string;
-  currentTenantName?: string;
-  tenantName?: string;
-  tenantPhone?: string;
-  prevWaterMeter?: number;
-  currWaterMeter?: number;
-  prevElectricMeter?: number;
-  currElectricMeter?: number;
-}
+export type RoomType = 'Studio (Single Bed)' | 'Studio (Double Bed)' | '1-Bedroom' | 'Corner Room' | 'Standard Studio' | 'Deluxe Studio' | '1-Bedroom Suite' | 'Corner Suite';
+export type RoomStatus = 'Available' | 'Reserved' | 'Occupied' | 'Maintenance';
 
 export interface Building {
   id: string;
   name: string;
-  code?: string;
-  address?: string;
+  code: string;
   floors: number;
-  totalRooms?: number;
+  totalRooms: number;
   description?: string;
   coverImage?: string;
+  address?: string;
   createdAt?: string;
 }
 
+export interface Room {
+  id: string;
+  roomNumber: string;
+  floor: number;
+  roomName: string;
+  roomType: RoomType;
+  description: string;
+  capacity: number;
+  price: number;
+  status: RoomStatus;
+  amenities: string;
+  sizeSqm: number;
+  bedType: string;
+  coverImage?: string;
+  gallery?: string;
+  buildingId?: string;
+  buildingName?: string;
+  currentTenantId?: string;
+  currentTenantName?: string;
+  prevWaterMeter?: number;
+  currWaterMeter?: number;
+  prevElectricMeter?: number;
+  currElectricMeter?: number;
+  createdAt?: string;
+}
+
+// ----------------------------------------------------------------------
+// APARTMENT MANAGEMENT SPECIFIC TYPES
+// ----------------------------------------------------------------------
+
+export type BillingCycle = 'monthly' | 'yearly';
+
 export interface Tenant {
   id: string;
-  name: string;
+  fullname: string;
   phone: string;
   email: string;
-  roomId?: string;
-  roomNumber?: string;
-  status?: string;
-  idCardNo?: string;
+  idCardPassport: string;
+  emergencyContact: string;
+  unitId?: string;
+  unitNumber?: string;
+  createdAt: string;
 }
+
+export type LeaseStatus = 'Active' | 'Terminated' | 'Expired';
 
 export interface Lease {
   id: string;
   tenantId: string;
-  tenantName?: string;
+  tenantName: string;
+  tenantPhone: string;
   roomId: string;
-  roomNumber?: string;
-  startDate: string;
-  endDate: string;
-  deposit?: number;
-  monthlyRent?: number;
-  rentAmount?: number;
-  status?: string;
+  roomNumber: string;
+  checkInDate: string;
+  checkOutDate: string;
+  rentAmount: number;
+  billingCycle: BillingCycle;
+  depositAmount: number;
+  status: LeaseStatus;
+  notes?: string;
+  createdAt: string;
 }
 
-export type BillStatus = 'Pending' | 'Paid' | 'Overdue' | string;
+export type BillStatus = 'Pending' | 'Paid';
 
 export interface UtilityBill {
   id: string;
-  invoiceNo?: string;
-  leaseId?: string;
+  invoiceNo: string;
+  leaseId: string;
   roomId: string;
-  roomNumber?: string;
+  roomNumber: string;
+  buildingName?: string;
   tenantName?: string;
-  month: string;
-  billingMonth?: string;
-  waterAmount: number;
-  electricAmount?: number;
-  electricityAmount: number;
+  billingMonth: string;
   rentAmount: number;
+  prevWaterMeter: number;
+  currWaterMeter: number;
+  waterRate: number;
+  waterAmount: number;
+  prevElectricMeter: number;
+  currElectricMeter: number;
+  electricRate: number;
+  electricAmount: number;
+  commonFee: number;
   totalAmount: number;
-  prevWaterMeter?: number;
-  currWaterMeter?: number;
-  waterRate?: number;
-  prevElectricMeter?: number;
-  currElectricMeter?: number;
-  electricRate?: number;
-  commonFee?: number;
-  dueDate: string;
-  paymentDate?: string;
   status: BillStatus;
-  slipUrl?: string;
-  createdAt?: string;
+  paymentDate?: string;
+  slipImage?: string;
+  createdAt: string;
 }
 
-export interface MaintenanceTask {
-  id: string;
-  taskNo?: string;
-  roomId?: string;
-  roomNumber?: string;
-  title: string;
-  description: string;
-  category?: string;
-  priority?: 'Low' | 'Medium' | 'High';
-  status: 'Pending' | 'In Progress' | 'Completed';
-  createdAt?: string;
-  reportedDate?: string;
-  preferredTime?: string;
-  assignedWorker?: string;
-  reporterName?: string;
-  reporterPhone?: string;
-  reporterEmail?: string;
-  suppliesUsed?: string;
-  occupancyType?: string;
-  cost?: number;
-  laborCost?: number;
-  totalCost?: number;
+export type MaintenanceCategory = 'Light bulb replacement' | 'Air-con servicing' | 'Plumbing' | 'Electrical' | 'General Repair';
+export type MaintenancePriority = 'Low' | 'Medium' | 'High';
+export type MaintenanceTaskStatus = 'Pending' | 'In Progress' | 'Completed';
+export type ReminderFrequency = 'None' | 'Monthly' | 'Quarterly' | 'Every 6 Months' | 'Yearly';
+export type OccupancyMaintenanceType = 'Occupied' | 'Vacant/Common';
+
+export interface SupplyUsage {
+  supply_id: string;
+  name: string;
+  quantity: number;
+  unit_cost: number;
 }
 
 export interface SupplyItem {
   id: string;
   name: string;
-  category?: string;
-  quantity: number;
-  stockQuantity?: number;
-  unit?: string;
-  unitName?: string;
-  unitCost?: number;
+  category: string;
+  stockQuantity: number;
+  unitCost: number;
+  unitName: string;
+}
+
+export interface MaintenanceTask {
+  id: string;
+  taskNo: string;
+  roomId: string;
+  roomNumber: string;
+  buildingName?: string;
+  occupancyType: OccupancyMaintenanceType;
+  category: MaintenanceCategory;
+  description: string;
+  reportedDate: string;
+  dueDate: string;
+  preferredTime?: string;
+  reporterName?: string;
+  reporterPhone?: string;
+  reporterEmail?: string;
+  priority: MaintenancePriority;
+  status: MaintenanceTaskStatus;
+  assignedWorker: string;
+  suppliesUsed: string; // JSON string from backend
+  laborCost: number;
+  totalCost: number;
+  recurringReminder: ReminderFrequency;
+  createdAt: string;
+  completedAt?: string;
 }
 
 export interface MaintenanceLog {
   id: string;
-  taskId?: string;
-  taskNo?: string;
-  roomId?: string;
-  roomNumber?: string;
-  category?: string;
-  date?: string;
-  description?: string;
-  suppliesSummary?: string;
-  performedBy?: string;
-  totalCost?: number;
-  details: string;
-  createdAt: string;
+  roomId: string;
+  roomNumber: string;
+  date: string;
+  taskNo: string;
+  category: MaintenanceCategory;
+  description: string;
+  suppliesSummary: string;
+  totalCost: number;
+  performedBy: string;
 }
 
 export interface ScheduledReminder {
   id: string;
   title: string;
-  category?: string;
+  category: MaintenanceCategory;
   roomId?: string;
   roomNumber?: string;
-  frequency?: string;
-  dueDate: string;
-  nextDueDate?: string;
-  isActive?: boolean;
+  frequency: ReminderFrequency;
+  lastTriggered?: string;
+  nextDueDate: string;
+  isActive: boolean;
 }
 
 export interface Booking {

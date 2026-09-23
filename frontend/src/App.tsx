@@ -18,7 +18,9 @@ import { Register } from './pages/public/Register';
 import { ProfilePage } from './pages/public/ProfilePage';
 import { BookingPage } from './pages/public/BookingPage';
 import { CheckBookingPage } from './pages/public/CheckBookingPage';
-import { RoomListingPage } from './pages/public/RoomListingPage';
+import { Home } from './pages/public/Home';
+import { Rooms } from './pages/public/Rooms';
+import { RoomDetail } from './pages/public/RoomDetail';
 import { MyApartmentPage } from './pages/public/MyApartmentPage';
 import { PaymentPage } from './pages/public/PaymentPage';
 import { ResidentMaintenancePage } from './pages/public/ResidentMaintenancePage';
@@ -108,7 +110,7 @@ export const AppContent: React.FC = () => {
       />
       <Routes>
         {/* PUBLIC & GENERAL ROUTES */}
-        <Route path="/" element={<RootRedirect />} />
+        <Route path="/" element={<PublicLayout><Home /></PublicLayout>} />
         <Route path="/login" element={<PublicLayout><Login /></PublicLayout>} />
         <Route path="/register" element={<PublicLayout><Register /></PublicLayout>} />
         <Route path="/signup" element={<PublicLayout><Register /></PublicLayout>} />
@@ -116,7 +118,8 @@ export const AppContent: React.FC = () => {
         <Route path="/profile" element={<PublicLayout><ProfilePage /></PublicLayout>} />
 
         {/* ROOMS & BOOKING ROUTES */}
-        <Route path="/rooms" element={<PublicLayout><RoomListingPage /></PublicLayout>} />
+        <Route path="/rooms" element={<PublicLayout><Rooms /></PublicLayout>} />
+        <Route path="/rooms/:id" element={<PublicLayout><RoomDetail /></PublicLayout>} />
         <Route path="/booking/:roomId" element={<PublicLayout><BookingPage /></PublicLayout>} />
         <Route path="/payment/:bookingId" element={<PublicLayout><PaymentPage /></PublicLayout>} />
         <Route path="/check-booking" element={<PublicLayout><CheckBookingPage /></PublicLayout>} />
