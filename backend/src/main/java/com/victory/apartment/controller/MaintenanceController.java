@@ -343,7 +343,9 @@ public class MaintenanceController {
 
     // === MAINTENANCE LOGS (per-unit history) ===
     @GetMapping("/maintenance-logs")
-    public List<MaintenanceLog> getAllLogs(@RequestParam(required = false) String roomId) {
+    public List<MaintenanceLog> getAllLogs(
+            @RequestParam(required = false) String roomId,
+            @RequestParam(required = false) String buildingId) {
         // Sync all tasks into logs so nothing is missing
         List<MaintenanceTask> allTasks = taskRepo.findAll();
         for (MaintenanceTask t : allTasks) {
@@ -353,9 +355,17 @@ public class MaintenanceController {
         }
         recalculateAndDeductSuppliesStock();
 
-        return (roomId != null && !roomId.isEmpty())
+        List<MaintenanceLog> logs = (roomId != null && !roomId.isEmpty())
                 ? logRepo.findByRoomIdOrderByDateDesc(roomId)
                 : logRepo.findAll();
+
+        if (buildingId != null && !buildingId.isEmpty() && !"All".equalsIgnoreCase(buildingId)) {
+            List<String> roomIds = roomRepo.findByBuildingIdOrderByRoomNumberAsc(buildingId)
+                    .stream().map(com.victory.apartment.model.Room::getId).toList();
+            return logs.stream().filter(l -> l.getRoomId() != null && roomIds.contains(l.getRoomId())).toList();
+        }
+        
+        return logs;
     }
 
     @PostMapping("/maintenance-logs")
