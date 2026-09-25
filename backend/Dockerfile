@@ -14,14 +14,14 @@ COPY src ./src
 RUN mvn clean package -DskipTests -q
 
 # ============================================================
-# Stage 2: Run - JRE 17 Alpine (lightweight)
+# Stage 2: Run - JRE 17 (ARM64-compatible)
 # ============================================================
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
 # Create a non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 USER appuser
 
 # Copy only the built jar from the builder stage
