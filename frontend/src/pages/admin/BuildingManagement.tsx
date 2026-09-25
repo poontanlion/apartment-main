@@ -17,6 +17,7 @@ export const BuildingManagement: React.FC = () => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBuilding, setEditingBuilding] = useState<Partial<Building> | null>(null);
+  const [unitsPerFloor, setUnitsPerFloor] = useState(12);
 
   useEffect(() => {
     loadData();
@@ -36,20 +37,24 @@ export const BuildingManagement: React.FC = () => {
   };
 
   const handleOpenAddModal = () => {
+    const floors = 2;
+    const units = 12;
     setEditingBuilding({
       name: '',
       code: '',
-      floors: 5,
-      totalRooms: 20,
+      floors,
+      totalRooms: floors * units,
       description: '',
       coverImage: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
       address: '',
     });
+    setUnitsPerFloor(units);
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (building: Building) => {
     setEditingBuilding(building);
+    setUnitsPerFloor(Math.max(1, Math.round(building.totalRooms / (building.floors || 1))));
     setIsModalOpen(true);
   };
 
@@ -74,7 +79,13 @@ export const BuildingManagement: React.FC = () => {
     }
 
     try {
-      await saveBuilding(editingBuilding);
+      const floorsNum = Number(editingBuilding.floors) || 1;
+      const totalUnitsNum = floorsNum * (Number(unitsPerFloor) || 1);
+      await saveBuilding({
+        ...editingBuilding,
+        floors: floorsNum,
+        totalRooms: totalUnitsNum,
+      });
       toast.success(
         editingBuilding.id
           ? (language === 'th' ? 'แก้ไขข้อมูลอาคารเรียบร้อย' : 'Building updated successfully')
@@ -221,7 +232,6 @@ export const BuildingManagement: React.FC = () => {
                 {/* Content & Stats */}
                 <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                   <div>
-
                     <div className="grid grid-cols-3 gap-2 mt-4 text-center">
                       <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
                         <span className="block text-xs text-slate-400">{language === 'th' ? 'ห้องทั้งหมด' : 'Total Units'}</span>
@@ -243,14 +253,14 @@ export const BuildingManagement: React.FC = () => {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleOpenEditModal(building)}
-                        className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                        className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                         title={language === 'th' ? 'แก้ไขข้อมูลตึก' : 'Edit Building'}
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteBuilding(building.id, building.name)}
-                        className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors"
+                        className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors cursor-pointer"
                         title={language === 'th' ? 'ลบตึก' : 'Delete Building'}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -275,26 +285,27 @@ export const BuildingManagement: React.FC = () => {
       {/* Add / Edit Modal */}
       {isModalOpen && editingBuilding && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-nike-dark-card rounded-2xl max-w-lg w-full p-6 border border-slate-100 dark:border-slate-800 shadow-xl space-y-4">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-indigo-600" />
+          <div className="bg-white dark:bg-nike-dark-card rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl space-y-4 border border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between items-center mb-1">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+                <Building2 className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
                 {editingBuilding.id 
                   ? (language === 'th' ? 'แก้ไขข้อมูลอาคาร' : 'Edit Building') 
                   : (language === 'th' ? 'เพิ่มตึกใหม่' : 'Add New Building')}
               </h2>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSubmitBuilding} className="space-y-4 text-sm">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <div className="grid grid-cols-12 gap-3.5">
+                <div className="col-span-7 sm:col-span-8">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                     {language === 'th' ? 'ชื่ออาคาร' : 'Building Name'} <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -303,11 +314,11 @@ export const BuildingManagement: React.FC = () => {
                     placeholder={language === 'th' ? 'เช่น อาคาร A (Victory Tower A)' : 'e.g. Building A (Victory Tower A)'}
                     value={editingBuilding.name || ''}
                     onChange={(e) => setEditingBuilding({ ...editingBuilding, name: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                    className="w-full px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <div className="col-span-5 sm:col-span-4">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                     {language === 'th' ? 'รหัสอาคาร' : 'Code'} <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -316,40 +327,53 @@ export const BuildingManagement: React.FC = () => {
                     placeholder={language === 'th' ? 'เช่น A, B' : 'e.g. A, B'}
                     value={editingBuilding.code || ''}
                     onChange={(e) => setEditingBuilding({ ...editingBuilding, code: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                    className="w-full px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    {language === 'th' ? 'จำนวนห้องต่อชั้น' : 'Units per Floor'}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={unitsPerFloor}
+                    onChange={(e) => {
+                      const units = parseInt(e.target.value) || 1;
+                      setUnitsPerFloor(units);
+                      setEditingBuilding({ ...editingBuilding, totalRooms: (editingBuilding.floors || 1) * units });
+                    }}
+                    className="w-full px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                     {language === 'th' ? 'จำนวนชั้น' : 'Floors'}
                   </label>
                   <input
                     type="number"
                     min="1"
                     value={editingBuilding.floors || 1}
-                    onChange={(e) => setEditingBuilding({ ...editingBuilding, floors: parseInt(e.target.value) || 1 })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    {language === 'th' ? 'จำนวนห้องรวม' : 'Total Units'}
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={editingBuilding.totalRooms || 1}
-                    onChange={(e) => setEditingBuilding({ ...editingBuilding, totalRooms: parseInt(e.target.value) || 1 })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                    onChange={(e) => {
+                      const floors = parseInt(e.target.value) || 1;
+                      setEditingBuilding({ ...editingBuilding, floors, totalRooms: floors * unitsPerFloor });
+                    }}
+                    className="w-full px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
                   />
                 </div>
               </div>
 
+              {/* Total Units Banner */}
+              <div className="bg-[#EEF2FF] dark:bg-indigo-950/40 border border-indigo-100/60 dark:border-indigo-900/40 rounded-2xl px-4 py-3 text-sm text-[#4338CA] dark:text-indigo-300 font-medium flex items-center">
+                {language === 'th' ? 'จำนวนห้องรวม: ' : 'Total Units: '}
+                <span className="font-bold ml-1.5">{(editingBuilding.floors || 1) * unitsPerFloor}</span>
+              </div>
+
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   {language === 'th' ? 'ที่อยู่อาคาร / ทำเล' : 'Building Address / Location'}
                 </label>
                 <input
@@ -357,49 +381,49 @@ export const BuildingManagement: React.FC = () => {
                   placeholder={language === 'th' ? 'เช่น 123/1 ถนนสุขุมวิท กรุงเทพฯ' : 'e.g. 123/1 Sukhumvit Rd, Bangkok'}
                   value={editingBuilding.address || ''}
                   onChange={(e) => setEditingBuilding({ ...editingBuilding, address: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  className="w-full px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   {language === 'th' ? 'URL รูปภาพหน้าปก' : 'Cover Image URL'}
                 </label>
                 <input
                   type="url"
-                  placeholder="https://..."
+                  placeholder="https://images.unsplash.com/..."
                   value={editingBuilding.coverImage || ''}
                   onChange={(e) => setEditingBuilding({ ...editingBuilding, coverImage: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  className="w-full px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  {language === 'th' ? 'คำอธิบายตึก' : 'Description'}
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  {language === 'th' ? 'คำอธิบาย' : 'Description'}
                 </label>
                 <textarea
                   rows={3}
                   placeholder={language === 'th' ? 'รายละเอียดเพิ่มเติมของอาคาร เช่น สิ่งอำนวยความสะดวก...' : 'Additional details, building amenities...'}
                   value={editingBuilding.description || ''}
                   onChange={(e) => setEditingBuilding({ ...editingBuilding, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white resize-none"
+                  className="w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm resize-none"
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex justify-end items-center gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+                  className="px-5 py-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium text-sm transition-colors cursor-pointer"
                 >
                   {language === 'th' ? 'ยกเลิก' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium shadow-sm"
+                  className="px-7 py-2.5 bg-[#4F46E5] hover:bg-[#4338CA] active:scale-[0.98] text-white rounded-xl font-semibold text-sm shadow-sm transition-all cursor-pointer"
                 >
-                  {language === 'th' ? 'บันทึกข้อมูล' : 'Save'}
+                  {language === 'th' ? 'บันทึก' : 'Save'}
                 </button>
               </div>
             </form>
