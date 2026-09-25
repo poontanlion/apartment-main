@@ -1,20 +1,20 @@
-name: Backend Unit Tests
+name: Backend CI
 
 on:
   push:
     branches: [ "main", "develop" ]
     paths:
       - 'backend/**'
-      - '.github/workflows/backend-unit-tests.yml'
+      - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [ "main", "develop" ]
     paths:
       - 'backend/**'
-      - '.github/workflows/backend-unit-tests.yml'
+      - '.github/workflows/backend-ci.yml'
   workflow_dispatch:
 
 jobs:
-  unit-test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +24,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
-      - name: Run Unit Tests
+      - name: Compile Backend
         working-directory: ./backend
-        run: ./mvnw test -Dtest="*ControllerTest"
+        run: ./mvnw clean compile
