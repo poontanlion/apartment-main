@@ -29,3 +29,13 @@ jobs:
 
       - name: Build Docker images
         run: docker compose build
+
+      - name: Report Result
+        if: always()
+        run: |
+          {
+            echo "## Docker Build Report"
+            echo "- Status: ${{ job.status }}"
+            echo "- Task: docker compose build"
+            echo "- Services: backend, frontend"
+          } >> "$GITHUB_STEP_SUMMARY"

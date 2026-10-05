@@ -27,3 +27,13 @@ jobs:
       - name: Compile Backend
         working-directory: ./backend
         run: ./mvnw clean compile
+
+      - name: Report Result
+        if: always()
+        run: |
+          {
+            echo "## Backend CI Report"
+            echo "- Status: ${{ job.status }}"
+            echo "- Task: Maven clean compile"
+            echo "- Java: 17 (Temurin)"
+          } >> "$GITHUB_STEP_SUMMARY"

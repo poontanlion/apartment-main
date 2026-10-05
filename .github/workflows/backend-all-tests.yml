@@ -27,3 +27,21 @@ jobs:
       - name: Run All Tests
         working-directory: ./backend
         run: ./mvnw test
+
+      - name: Publish All Test Report
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: Backend All Test Results
+          path: backend/target/surefire-reports/*.xml
+          reporter: java-junit
+
+      - name: Report Result
+        if: always()
+        run: |
+          {
+            echo "## Backend All Tests Report"
+            echo "- Status: ${{ job.status }}"
+            echo "- Test scope: All Maven tests"
+            echo "- JUnit XML: backend/target/surefire-reports/*.xml"
+          } >> "$GITHUB_STEP_SUMMARY"

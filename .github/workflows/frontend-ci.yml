@@ -30,3 +30,13 @@ jobs:
       - name: Build Frontend
         working-directory: ./frontend
         run: npm run build
+
+      - name: Report Result
+        if: always()
+        run: |
+          {
+            echo "## Frontend CI Report"
+            echo "- Status: ${{ job.status }}"
+            echo "- Task: npm ci + npm run build"
+            echo "- Node.js: 20.x"
+          } >> "$GITHUB_STEP_SUMMARY"
