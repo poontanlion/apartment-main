@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: wachiravit01/apartment-backend:latest
+        image: pixiz/apartment-backend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
@@ -85,7 +85,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: wachiravit01/apartment-frontend:latest
+        image: pixiz/apartment-frontend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80
