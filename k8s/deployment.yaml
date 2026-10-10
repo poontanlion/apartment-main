@@ -1,3 +1,6 @@
+# ============================================================
+# Backend Deployment
+# ============================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,16 +19,38 @@ spec:
     spec:
       containers:
       - name: backend
-        image: apartment-backend:latest
-        imagePullPolicy: IfNotPresent
+        image: wachiravit01/apartment-backend:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
-        env:
-        - name: SPRING_PROFILES_ACTIVE
-          value: "prod"
-        - name: SERVER_PORT
-          value: "8080"
+        envFrom:
+        - configMapRef:
+            name: apartment-backend-config
+        livenessProbe:
+          httpGet:
+            path: /api/general/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/general/health
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
 ---
+# ============================================================
+# Backend Service (ClusterIP — accessible only inside cluster)
+# ============================================================
 apiVersion: v1
 kind: Service
 metadata:
@@ -39,6 +64,9 @@ spec:
       port: 8080
       targetPort: 8080
 ---
+# ============================================================
+# Frontend Deployment
+# ============================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -57,11 +85,35 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: apartment-frontend:latest
-        imagePullPolicy: IfNotPresent
+        image: wachiravit01/apartment-frontend:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 80
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
 ---
+# ============================================================
+# Frontend Service (NodePort — accessible from outside cluster)
+# ============================================================
 apiVersion: v1
 kind: Service
 metadata:
