@@ -95,3 +95,7 @@ pnpm-debug.log*
 ehthumbs.db
 Thumbs.db
 desktop.ini
+
+# Playwright
+frontend/playwright-report/
+frontend/test-results/
