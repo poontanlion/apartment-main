@@ -37,14 +37,20 @@ jobs:
         run: kubectl apply -f k8s/deployment.yaml
 
       - name: Update Backend image to latest commit
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
+          DOCKER_USER="${DOCKERHUB_USERNAME:-pixiz}"
           kubectl set image deployment/apartment-backend-deployment \
-            backend=wachiravit01/apartment-backend:sha-${{ github.sha }}
+            backend="${DOCKER_USER}/apartment-backend:sha-${{ github.sha }}"
 
       - name: Update Frontend image to latest commit
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
+          DOCKER_USER="${DOCKERHUB_USERNAME:-pixiz}"
           kubectl set image deployment/apartment-frontend-deployment \
-            frontend=wachiravit01/apartment-frontend:sha-${{ github.sha }}
+            frontend="${DOCKER_USER}/apartment-frontend:sha-${{ github.sha }}"
 
       - name: Wait for Backend rollout
         run: kubectl rollout status deployment/apartment-backend-deployment --timeout=120s
@@ -54,12 +60,15 @@ jobs:
 
       - name: Report Result
         if: always()
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
+          DOCKER_USER="${DOCKERHUB_USERNAME:-pixiz}"
           {
             echo "## Deploy to Kubernetes Report"
             echo "- Status: ${{ job.status }}"
             echo "- Trigger: ${{ github.event_name }}"
             echo "- Commit: sha-${{ github.sha }}"
-            echo "- Backend image: wachiravit01/apartment-backend:sha-${{ github.sha }}"
-            echo "- Frontend image: wachiravit01/apartment-frontend:sha-${{ github.sha }}"
+            echo "- Backend image: ${DOCKER_USER}/apartment-backend:sha-${{ github.sha }}"
+            echo "- Frontend image: ${DOCKER_USER}/apartment-frontend:sha-${{ github.sha }}"
           } >> "$GITHUB_STEP_SUMMARY"

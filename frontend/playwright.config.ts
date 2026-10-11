@@ -35,6 +35,9 @@ export default defineConfig({
       url: 'http://localhost:8080/api/rooms',
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
+      env: {
+        ...(process.env.JAVA_HOME ? {} : { JAVA_HOME: 'C:\\Users\\wachi\\.jdks\\ms-17.0.20.1' }),
+      },
     },
     {
       command: 'npm run dev',
