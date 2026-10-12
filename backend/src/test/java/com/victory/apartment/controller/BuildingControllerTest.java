@@ -3,6 +3,7 @@ package com.victory.apartment.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.victory.apartment.model.Building;
 import com.victory.apartment.repository.BuildingRepository;
+import com.victory.apartment.repository.RoomRepository;
 import com.victory.apartment.service.ActivityLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,9 @@ public class BuildingControllerTest {
 
     @MockBean
     private BuildingRepository repo;
+
+    @MockBean
+    private RoomRepository roomRepo;
 
     @MockBean
     private ActivityLogService logService;
