@@ -104,13 +104,20 @@ export const BuildingManagement: React.FC = () => {
   );
 
   // Helper to calculate stats per building
-  const getBuildingStats = (buildingId: string, buildingCode: string) => {
-    const bCode = (buildingCode || '').toLowerCase();
-    const isBld2Id = buildingId === 'bld-2' || bCode === 'b';
+  const getBuildingStats = (buildingId: string) => {
+    const isLegacyBuildingA = buildingId === 'bld-1';
+    const isLegacyBuildingB = buildingId === 'bld-2';
     const buildingRooms = rooms.filter(r => {
-      const rIsBld2 = r.buildingId === 'bld-2' || r.roomNumber.toLowerCase().startsWith('b') || (r.buildingName && r.buildingName.toLowerCase().includes('b'));
-      if (isBld2Id) return rIsBld2;
-      return !rIsBld2;
+      // The stored relationship is authoritative. Never infer a different building
+      // for rooms that already have a buildingId.
+      if (r.buildingId) return r.buildingId === buildingId;
+
+      // Older room records may not have a buildingId. Keep the existing A/B
+      // records visible without letting unassigned rooms inflate new buildings.
+      const roomNumber = (r.roomNumber || '').toLowerCase();
+      if (isLegacyBuildingB) return roomNumber.startsWith('b');
+      if (isLegacyBuildingA) return !roomNumber.startsWith('b');
+      return false;
     });
     const total = buildingRooms.length;
     const occupied = buildingRooms.filter(r => r.status === 'Occupied').length;
@@ -201,7 +208,7 @@ export const BuildingManagement: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {filteredBuildings.map((building) => {
-            const stats = getBuildingStats(building.id, building.code || '');
+            const stats = getBuildingStats(building.id);
             const bName = language === 'en' ? (building.name.includes('อาคาร A') ? 'Building A (Victory Tower A)' : building.name.includes('อาคาร B') ? 'Building B (Victory Residence B)' : building.name) : building.name;
             return (
               <div

@@ -12,7 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { BedDouble, Maximize2, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const RoomCard: React.FC<{ room: Room }> = ({ room }) => {
+export const RoomCard: React.FC<{ room: Room; buildingLabel?: string }> = ({ room, buildingLabel }) => {
   const navigate = useNavigate();
   const { t, language } = useLanguage();
   const { isAuthenticated } = useAuth();
@@ -95,11 +95,11 @@ export const RoomCard: React.FC<{ room: Room }> = ({ room }) => {
               {displayRoomType}
             </span>
             <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-              room.buildingId === 'bld-2' || room.roomNumber.startsWith('B')
+              room.buildingId === 'bld-2' || (!room.buildingId && room.roomNumber.startsWith('B'))
                 ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
                 : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
             }`}>
-              {room.buildingId === 'bld-2' || room.roomNumber.startsWith('B') ? 'อาคารเสริม B' : 'อาคาร A'}
+              {buildingLabel || (room.buildingId === 'bld-2' || room.roomNumber.startsWith('B') ? 'อาคารเสริม B' : 'อาคาร A')}
             </span>
           </div>
 

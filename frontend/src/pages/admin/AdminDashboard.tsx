@@ -3,10 +3,10 @@ import {
   Building2, CheckCircle2, Wrench,
   DollarSign, BellRing, FileText, PlusCircle, RotateCw
 } from 'lucide-react';
-import { Room, Lease, UtilityBill, MaintenanceTask, ScheduledReminder, Booking } from '../../types';
+import { Room, Lease, UtilityBill, MaintenanceTask, ScheduledReminder, Booking, Building } from '../../types';
 import {
   getRooms, getLeases, getUtilityBills,
-  getMaintenanceTasks, getReminders, getBookings
+  getMaintenanceTasks, getReminders, getBookings, getBuildings
 } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import { ApartmentFloorGrid } from '../../components/admin/ApartmentFloorGrid';
@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 export const AdminDashboard: React.FC = () => {
   const { t, language } = useLanguage();
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [buildings, setBuildings] = useState<Building[]>([]);
   const [leases, setLeases] = useState<Lease[]>([]);
   const [bills, setBills] = useState<UtilityBill[]>([]);
   const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
@@ -26,15 +27,17 @@ export const AdminDashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [roomsData, leasesData, billsData, tasksData, remindersData, bookingsData] = await Promise.all([
+      const [roomsData, leasesData, billsData, tasksData, remindersData, bookingsData, buildingsData] = await Promise.all([
         getRooms(),
         getLeases(),
         getUtilityBills(),
         getMaintenanceTasks(),
         getReminders(),
         getBookings(),
+        getBuildings(),
       ]);
       setRooms(roomsData);
+      setBuildings(buildingsData);
       setLeases(leasesData);
       setBills(billsData);
       setTasks(tasksData);
@@ -219,7 +222,7 @@ export const AdminDashboard: React.FC = () => {
           </button>
         </div>
 
-        <ApartmentFloorGrid rooms={rooms} bookings={bookings} onRefresh={fetchDashboardData} />
+        <ApartmentFloorGrid rooms={rooms} buildings={buildings} bookings={bookings} onRefresh={fetchDashboardData} />
       </div>
 
       {/* LOWER WIDGETS */}
