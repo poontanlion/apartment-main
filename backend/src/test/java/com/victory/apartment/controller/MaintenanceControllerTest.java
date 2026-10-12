@@ -1,26 +1,36 @@
 package com.victory.apartment.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.victory.apartment.model.*;
-import com.victory.apartment.repository.*;
-import com.victory.apartment.service.ActivityLogService;
+import java.util.Arrays;
+import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import static org.mockito.ArgumentMatchers.any;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.Optional;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.victory.apartment.model.MaintenanceLog;
+import com.victory.apartment.model.MaintenanceTask;
+import com.victory.apartment.model.ScheduledReminder;
+import com.victory.apartment.model.SupplyItem;
+import com.victory.apartment.repository.AppNotificationRepository;
+import com.victory.apartment.repository.MaintenanceLogRepository;
+import com.victory.apartment.repository.MaintenanceTaskRepository;
+import com.victory.apartment.repository.RoomRepository;
+import com.victory.apartment.repository.ScheduledReminderRepository;
+import com.victory.apartment.repository.SupplyItemRepository;
+import com.victory.apartment.service.ActivityLogService;
 
 /**
  * Test cases for MaintenanceController.
