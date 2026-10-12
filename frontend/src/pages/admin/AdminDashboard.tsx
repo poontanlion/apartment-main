@@ -3,10 +3,10 @@ import {
   Building2, CheckCircle2, Wrench,
   DollarSign, BellRing, FileText, PlusCircle, RotateCw
 } from 'lucide-react';
-import { Room, Lease, UtilityBill, MaintenanceTask, ScheduledReminder } from '../../types';
+import { Room, Lease, UtilityBill, MaintenanceTask, ScheduledReminder, Booking } from '../../types';
 import {
   getRooms, getLeases, getUtilityBills,
-  getMaintenanceTasks, getReminders
+  getMaintenanceTasks, getReminders, getBookings
 } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import { ApartmentFloorGrid } from '../../components/admin/ApartmentFloorGrid';
@@ -21,15 +21,25 @@ export const AdminDashboard: React.FC = () => {
   const [bills, setBills] = useState<UtilityBill[]>([]);
   const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
   const [reminders, setReminders] = useState<ScheduledReminder[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchDashboardData = async () => {
     try {
-      setRooms(await getRooms());
-      setLeases(await getLeases());
-      setBills(await getUtilityBills());
-      setTasks(await getMaintenanceTasks());
-      setReminders(await getReminders());
+      const [roomsData, leasesData, billsData, tasksData, remindersData, bookingsData] = await Promise.all([
+        getRooms(),
+        getLeases(),
+        getUtilityBills(),
+        getMaintenanceTasks(),
+        getReminders(),
+        getBookings(),
+      ]);
+      setRooms(roomsData);
+      setLeases(leasesData);
+      setBills(billsData);
+      setTasks(tasksData);
+      setReminders(remindersData);
+      setBookings(bookingsData);
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err);
     }
@@ -47,7 +57,8 @@ export const AdminDashboard: React.FC = () => {
   }, []);
 
   const totalUnits = rooms.length;
-  const occupiedCount = rooms.filter(r => r.status === 'Occupied').length;
+  // Reserved = booking approved → counts as in-use for occupancy metrics
+  const occupiedCount = rooms.filter(r => r.status === 'Occupied' || r.status === 'Reserved').length;
   const availableCount = rooms.filter(r => r.status === 'Available').length;
   const maintenanceCount = rooms.filter(r => r.status === 'Maintenance').length;
   const reservedCount = rooms.filter(r => r.status === 'Reserved').length;
@@ -208,7 +219,7 @@ export const AdminDashboard: React.FC = () => {
           </button>
         </div>
 
-        <ApartmentFloorGrid rooms={rooms} onRefresh={fetchDashboardData} />
+        <ApartmentFloorGrid rooms={rooms} bookings={bookings} onRefresh={fetchDashboardData} />
       </div>
 
       {/* LOWER WIDGETS */}

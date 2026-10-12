@@ -323,11 +323,13 @@ export const MaintenanceManagement: React.FC = () => {
   };
 
   const getTaskOccupancy = (task: MaintenanceTask): 'Occupied' | 'Vacant/Common' => {
-    if (task.occupancyType === 'Vacant/Common') return 'Vacant/Common';
+    // Always check live room status first (room lookup by id or roomNumber)
     const rm = rooms.find(r => r.id === task.roomId || r.roomNumber === task.roomNumber);
     if (rm) {
-      return (rm.status === 'Occupied' || !!rm.currentTenantId) ? 'Occupied' : 'Vacant/Common';
+      // Reserved = booking approved → treat as Occupied for maintenance classification
+      return (rm.status === 'Occupied' || rm.status === 'Reserved' || !!rm.currentTenantId) ? 'Occupied' : 'Vacant/Common';
     }
+    // Fallback to stored value when room not found
     return task.occupancyType === 'Occupied' ? 'Occupied' : 'Vacant/Common';
   };
 

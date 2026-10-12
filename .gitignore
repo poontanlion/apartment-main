@@ -99,3 +99,9 @@ desktop.ini
 # Playwright
 frontend/playwright-report/
 frontend/test-results/
+
+# H2 Database files
+*.mv.db
+*.trace.db
+backend/data/
+data/

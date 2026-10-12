@@ -15,10 +15,12 @@ import java.util.UUID;
 public class BuildingController {
 
     private final BuildingRepository repo;
+    private final com.victory.apartment.repository.RoomRepository roomRepo;
     private final ActivityLogService logService;
 
-    public BuildingController(BuildingRepository repo, ActivityLogService logService) {
+    public BuildingController(BuildingRepository repo, com.victory.apartment.repository.RoomRepository roomRepo, ActivityLogService logService) {
         this.repo = repo;
+        this.roomRepo = roomRepo;
         this.logService = logService;
     }
 
@@ -42,14 +44,63 @@ public class BuildingController {
         if (building.getCreatedAt() == null) {
             building.setCreatedAt(LocalDateTime.now());
         }
-        if (building.getFloors() == null) building.setFloors(5);
-        if (building.getTotalRooms() == null) building.setTotalRooms(20);
+        int floors = building.getFloors() != null ? building.getFloors() : 2;
+        int totalRooms = building.getTotalRooms() != null ? building.getTotalRooms() : 24;
+        building.setFloors(floors);
+        building.setTotalRooms(totalRooms);
         if (building.getCoverImage() == null || building.getCoverImage().isEmpty()) {
             building.setCoverImage("https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80");
         }
 
-        logService.log("Building Created", "Created building " + building.getName() + " (" + building.getCode() + ")");
-        return repo.save(building);
+        Building saved = repo.save(building);
+
+        // Auto-generate room records if none exist for this building
+        int unitsPerFloor = Math.max(1, totalRooms / Math.max(1, floors));
+        String codePrefix = (building.getCode() != null && !building.getCode().isEmpty()) ? building.getCode().trim().toUpperCase() : "R";
+
+        for (int floor = 1; floor <= floors; floor++) {
+            for (int unit = 1; unit <= unitsPerFloor; unit++) {
+                String roomNum = String.format("%s%d%02d", codePrefix, floor, unit);
+                if (roomRepo.findByRoomNumber(roomNum).isEmpty()) {
+                    String type;
+                    if (unit <= 4) {
+                        type = "Studio (Single Bed)";
+                    } else if (unit <= 8) {
+                        type = "Studio (Double Bed)";
+                    } else if (unit <= 11) {
+                        type = "1-Bedroom";
+                    } else {
+                        type = "Corner Room";
+                    }
+                    com.victory.apartment.model.Room room = new com.victory.apartment.model.Room();
+                    room.setId("rm-" + UUID.randomUUID().toString().substring(0, 8));
+                    room.setRoomNumber(roomNum);
+                    room.setFloor(floor);
+                    room.setRoomName(String.format("Unit %s (%s)", roomNum, type));
+                    room.setRoomType(type);
+                    room.setDescription(String.format("ห้องพักชั้น %d %s ตกแต่งครบครัน เครื่องปรับอากาศ เครื่องทำน้ำอุ่น อินเทอร์เน็ตความเร็วสูง", floor, type));
+                    room.setCapacity(2);
+                    room.setPrice(5500.0 + (floor - 1) * 200.0);
+                    room.setStatus("Available");
+                    room.setAmenities("[\"High-Speed Wi-Fi\",\"Air Conditioner\",\"Water Heater\",\"Private Balcony\",\"Digital Keycard\"]");
+                    room.setSizeSqm(28.0 + (unit % 4) * 2.0);
+                    room.setBedType("Queen Bed (2 Guests)");
+                    room.setCoverImage("/rooms/std_1.jpg");
+                    room.setGallery("[\"/rooms/std_1.jpg\",\"/rooms/std_2.jpg\",\"/rooms/std_3.jpg\"]");
+                    room.setBuildingId(saved.getId());
+                    room.setBuildingName(saved.getName());
+                    room.setPrevWaterMeter(100.0);
+                    room.setCurrWaterMeter(100.0);
+                    room.setPrevElectricMeter(100.0);
+                    room.setCurrElectricMeter(100.0);
+                    room.setCreatedAt(LocalDateTime.now());
+                    roomRepo.save(room);
+                }
+            }
+        }
+
+        logService.log("Building Created", "Created building " + building.getName() + " (" + building.getCode() + ") with " + totalRooms + " units");
+        return saved;
     }
 
     @PutMapping("/{id}")

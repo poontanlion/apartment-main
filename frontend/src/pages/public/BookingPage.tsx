@@ -17,12 +17,21 @@ export const BookingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // Move-in must be at least tomorrow (pending admin approval)
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+  const defaultCheckOut = new Date();
+  defaultCheckOut.setDate(defaultCheckOut.getDate() + 31);
+  const defaultCheckOutStr = defaultCheckOut.toISOString().split('T')[0];
+
   const [formData, setFormData] = useState({
     guestName: user?.fullname || '',
     guestEmail: user?.email || '',
     guestPhone: user?.phone || '',
-    checkIn: new Date().toISOString().split('T')[0],
-    checkOut: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    checkIn: tomorrowStr,
+    checkOut: defaultCheckOutStr,
     guestCount: 1,
     specialRequests: '',
   });
@@ -186,16 +195,21 @@ export const BookingPage: React.FC = () => {
               <input
                 type="date"
                 required
+                min={tomorrowStr}
                 value={formData.checkIn}
                 onChange={(e) => setFormData({ ...formData, checkIn: e.target.value })}
                 className="w-full px-4 py-3 text-xs font-semibold rounded-full bg-nike-soft-cloud dark:bg-nike-dark-card border border-nike-hairline dark:border-nike-dark-card text-nike-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-nike-ink dark:focus:ring-white transition-all"
               />
+              <p className="text-[10px] text-nike-mute dark:text-nike-stone pl-2">
+                {language === 'th' ? '* วันย้ายเข้าจะมีผลหลังได้รับการอนุมัติจากผู้ดูแล' : '* Move-in date is subject to admin approval'}
+              </p>
             </div>
             <div className="space-y-1.5">
               <label className="block text-[11px] font-semibold text-nike-ink dark:text-white">{t('booking.checkOutDate')} *</label>
               <input
                 type="date"
                 required
+                min={formData.checkIn || tomorrowStr}
                 value={formData.checkOut}
                 onChange={(e) => setFormData({ ...formData, checkOut: e.target.value })}
                 className="w-full px-4 py-3 text-xs font-semibold rounded-full bg-nike-soft-cloud dark:bg-nike-dark-card border border-nike-hairline dark:border-nike-dark-card text-nike-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-nike-ink dark:focus:ring-white transition-all"

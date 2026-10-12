@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
-import { Room, MaintenanceLog } from '../../types';
+import { Room, MaintenanceLog, Booking } from '../../types';
 import { formatCurrency, formatSuppliesSummary } from '../../utils/formatters';
-import { UserCheck, Wrench, Home, X } from 'lucide-react';
+import { UserCheck, Wrench, Home, X, Clock } from 'lucide-react';
 import { getMaintenanceLogs } from '../../services/api';
 import { useLanguage } from '../../context/LanguageContext';
 
 interface ApartmentFloorGridProps {
   rooms: Room[];
+  bookings?: Booking[];
   onSelectRoom?: (room: Room) => void;
   onRefresh?: () => void;
 }
 
-export const ApartmentFloorGrid: React.FC<ApartmentFloorGridProps> = ({ rooms, onSelectRoom }) => {
+export const ApartmentFloorGrid: React.FC<ApartmentFloorGridProps> = ({ rooms, bookings = [], onSelectRoom }) => {
   const { t, language } = useLanguage();
   const [selectedBuilding, setSelectedBuilding] = useState<'all' | 'bld-1' | 'bld-2'>('all');
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
@@ -30,9 +31,8 @@ export const ApartmentFloorGrid: React.FC<ApartmentFloorGridProps> = ({ rooms, o
       ? buildingBRooms 
       : rooms;
 
-  // 3. Separate active rooms into Floor 1 & Floor 2
-  const floor1Rooms = displayRooms.filter(r => r.floor === 1).sort((a, b) => (a.roomNumber || '').localeCompare(b.roomNumber || ''));
-  const floor2Rooms = displayRooms.filter(r => r.floor === 2).sort((a, b) => (a.roomNumber || '').localeCompare(b.roomNumber || ''));
+  // 3. Get all unique floors dynamically and sort them ascending
+  const uniqueFloors = Array.from(new Set(displayRooms.map(r => r.floor || 1))).sort((a, b) => a - b);
 
   const handleRoomClick = async (room: Room) => {
     setSelectedRoom(room);
@@ -136,16 +136,34 @@ export const ApartmentFloorGrid: React.FC<ApartmentFloorGridProps> = ({ rooms, o
                   </span>
                 </div>
 
-                {room.currentTenantName ? (
-                  <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 truncate flex items-center gap-1">
-                    <UserCheck className="w-3 h-3 flex-shrink-0" />
-                    {room.currentTenantName}
-                  </div>
-                ) : (
-                  <div className="text-xs text-slate-400 dark:text-slate-400 italic">
-                    ({language === 'th' ? 'ไม่มีผู้เช่า' : 'No Tenant'})
-                  </div>
-                )}
+                {(() => {
+                  const activeBooking = bookings.find(
+                    b => (b.roomId === room.id || b.roomNumber === room.roomNumber) &&
+                         (b.status === 'Approved' || b.status === 'Pending')
+                  );
+                  if (room.currentTenantName) {
+                    return (
+                      <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 truncate flex items-center gap-1">
+                        <UserCheck className="w-3 h-3 flex-shrink-0" />
+                        {room.currentTenantName}
+                      </div>
+                    );
+                  }
+                  if (room.status === 'Reserved' || activeBooking) {
+                    const guestName = activeBooking?.guestName || (language === 'th' ? 'มีผู้จองแล้ว' : 'Booked Guest');
+                    return (
+                      <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 truncate flex items-center gap-1">
+                        <Clock className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">{language === 'th' ? `จอง: ${guestName}` : `Booked: ${guestName}`}</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="text-xs text-slate-400 dark:text-slate-400 italic">
+                      ({language === 'th' ? 'ไม่มีผู้เช่า' : 'No Tenant'})
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="mt-3 pt-2.5 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between w-full text-xs">
@@ -212,11 +230,23 @@ export const ApartmentFloorGrid: React.FC<ApartmentFloorGridProps> = ({ rooms, o
         </span>
       </div>
 
-      {/* Floor 1 Grid */}
-      {renderFloorGrid(language === 'th' ? 'ชั้น 1' : 'Floor 1', floor1Rooms)}
-
-      {/* Floor 2 Grid */}
-      {renderFloorGrid(language === 'th' ? 'ชั้น 2' : 'Floor 2', floor2Rooms)}
+      {/* Dynamic Floor Grids */}
+      {uniqueFloors.length === 0 ? (
+        <div className="text-center py-10 text-slate-400 italic">
+          {language === 'th' ? 'ไม่มีห้องพักสำหรับอาคารนี้' : 'No units found for this building'}
+        </div>
+      ) : (
+        uniqueFloors.map(floorNum => {
+          const floorRooms = displayRooms
+            .filter(r => r.floor === floorNum)
+            .sort((a, b) => (a.roomNumber || '').localeCompare(b.roomNumber || ''));
+          return (
+            <React.Fragment key={floorNum}>
+              {renderFloorGrid(language === 'th' ? `ชั้น ${floorNum}` : `Floor ${floorNum}`, floorRooms)}
+            </React.Fragment>
+          );
+        })
+      )}
 
       {/* Quick Room Details Modal */}
       {selectedRoom && (
@@ -286,10 +316,32 @@ export const ApartmentFloorGrid: React.FC<ApartmentFloorGridProps> = ({ rooms, o
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-nike-mute dark:text-nike-stone block">{language === 'th' ? 'ผู้เช่าปัจจุบัน' : 'Current Tenant'}</span>
-                    <span className="font-semibold text-blue-600 dark:text-blue-400 block mt-0.5">
-                      {selectedRoom.currentTenantName || (language === 'th' ? 'ไม่มีผู้เช่า' : 'No Active Tenant')}
-                    </span>
+                    <span className="text-xs text-nike-mute dark:text-nike-stone block">{language === 'th' ? 'ผู้เช่า/ผู้จอง' : 'Current Tenant / Guest'}</span>
+                    {(() => {
+                      const activeBooking = bookings.find(
+                        b => (b.roomId === selectedRoom.id || b.roomNumber === selectedRoom.roomNumber) &&
+                             (b.status === 'Approved' || b.status === 'Pending')
+                      );
+                      if (selectedRoom.currentTenantName) {
+                        return (
+                          <span className="font-semibold text-blue-600 dark:text-blue-400 block mt-0.5">
+                            {selectedRoom.currentTenantName}
+                          </span>
+                        );
+                      }
+                      if (selectedRoom.status === 'Reserved' || activeBooking) {
+                        return (
+                          <span className="font-semibold text-amber-600 dark:text-amber-400 block mt-0.5">
+                            {activeBooking ? `${activeBooking.guestName} (${language === 'th' ? 'ติดจอง' : 'Booked'})` : (language === 'th' ? 'มีผู้จองแล้ว' : 'Reserved')}
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="text-slate-400 dark:text-slate-400 italic block mt-0.5">
+                          {language === 'th' ? 'ไม่มีผู้เช่า' : 'No Active Tenant'}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
 
