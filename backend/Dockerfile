@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # Stage 1: Build - Maven + OpenJDK 17
 # ============================================================
 FROM maven:3.9-eclipse-temurin-17 AS builder
@@ -20,8 +20,9 @@ FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
-# Create a non-root user for security
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+# Create a non-root user for security and prepare writable directories
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser \
+    && mkdir -p /app/data && chown -R appuser:appgroup /app
 USER appuser
 
 # Copy only the built jar from the builder stage
