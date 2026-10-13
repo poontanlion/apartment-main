@@ -31,19 +31,41 @@ export async function createResident(request: APIRequestContext, name = 'E2E Res
   return { id: body.user.id, fullname: name, email, password, phone };
 }
 
+/** Creates a brand-new available room dedicated to this test. */
+export async function createTestRoom(request: APIRequestContext, prefix = 'RP') {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const roomResponse = await request.post(`${API}/rooms`, {
+    data: {
+      roomNumber: `${prefix}-${suffix}`,
+      floor: 1,
+      roomName: `Resident Portal Test Room ${suffix}`,
+      roomType: 'Standard Studio',
+      status: 'Available',
+      price: 5500,
+      capacity: 2,
+      sizeSqm: 28,
+      amenities: '[]',
+    },
+  });
+  expect(roomResponse.ok(), 'create test room via API').toBeTruthy();
+  return (await roomResponse.json()) as { id: string; roomNumber: string };
+}
+
 /** Finds a room that can still be booked. */
 export async function findAvailableRoom(request: APIRequestContext) {
   const res = await request.get(`${API}/rooms`);
   expect(res.ok()).toBeTruthy();
   const rooms: any[] = await res.json();
   const room = rooms.find((r) => r.status === 'Available');
-  expect(room, 'seed data should contain at least one Available room').toBeTruthy();
-  return room as { id: string; roomNumber: string };
+  if (room) {
+    return room as { id: string; roomNumber: string };
+  }
+  return createTestRoom(request);
 }
 
 /** Resident books a room and the admin approves it, so the maintenance portal unlocks. */
 export async function bookAndApproveRoom(request: APIRequestContext, resident: ResidentAccount) {
-  const room = await findAvailableRoom(request);
+  const room = await createTestRoom(request);
 
   const bookingRes = await request.post(`${API}/bookings`, {
     data: {

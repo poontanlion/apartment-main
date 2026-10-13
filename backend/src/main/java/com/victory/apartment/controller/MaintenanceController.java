@@ -74,7 +74,7 @@ public class MaintenanceController {
     public MaintenanceTask createTask(@RequestBody MaintenanceTask task) {
         if (task.getId() == null || task.getId().isEmpty()) {
             task.setId("mt-" + UUID.randomUUID().toString().substring(0, 8));
-            task.setTaskNo(String.format("MNT-%tY%tm-%02d", LocalDateTime.now(), LocalDateTime.now(), (int)(Math.random() * 90 + 10)));
+            task.setTaskNo(String.format("MNT-%tY%tm-%s", LocalDateTime.now(), LocalDateTime.now(), UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase()));
         }
         if (task.getCreatedAt() == null) task.setCreatedAt(LocalDateTime.now());
         if (task.getStatus() == null) task.setStatus("Pending");
