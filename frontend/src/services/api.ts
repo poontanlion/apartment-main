@@ -379,15 +379,11 @@ export const logoutApiUser = async (): Promise<void> => {
   if (!res.ok) throw new Error('Unable to sign out');
 };
 
-export const updateBookingStatus = async (bookingId: string, status: string): Promise<Booking | null> => {
-  try {
-    return await fetchJson<Booking>(`${API_BASE}/bookings/${bookingId}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status }),
-    });
-  } catch {
-    return null;
-  }
+export const updateBookingStatus = async (bookingId: string, status: string): Promise<Booking> => {
+  return fetchJson<Booking>(`${API_BASE}/bookings/${bookingId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status }),
+  });
 };
 
 export const cancelBooking = async (bookingId: string): Promise<Booking | null> => {

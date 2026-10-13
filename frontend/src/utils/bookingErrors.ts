@@ -18,6 +18,10 @@ const messages: Record<string, [string, string]> = {
     'วันที่เลือกทับกับการจองที่อนุมัติแล้ว กรุณาเปลี่ยนช่วงวันที่หรือเลือกห้องอื่น หากเป็นการจองของคุณให้ทำสัญญาจากการจองเดิม',
     'These dates overlap an approved booking. Change the dates or choose another room. If you already booked this room, create your lease from that booking.',
   ],
+  LEASE_DATE_CONFLICT: [
+    'วันที่เลือกทับกับสัญญาเช่าที่มีอยู่ของห้องนี้ กรุณาเปลี่ยนช่วงวันที่หรือเลือกห้องว่างอื่น',
+    'These dates overlap an existing lease for this room. Change the dates or choose another available room.',
+  ],
   BOOKING_CONFLICT: [
     'จองไม่ได้เนื่องจากสถานะห้องหรือวันที่ขัดกับการจองที่มีอยู่ กรุณาตรวจการจองเดิม เปลี่ยนช่วงวันที่ หรือเลือกห้องว่างอื่น',
     'The room status or dates conflict with an existing booking. Check your existing booking, change the dates, or choose another available room.',

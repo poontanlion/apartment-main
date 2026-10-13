@@ -2,16 +2,19 @@ package com.victory.apartment.controller;
 
 import com.victory.apartment.model.Booking;
 import com.victory.apartment.model.AppNotification;
+import com.victory.apartment.model.Lease;
 import com.victory.apartment.repository.BookingRepository;
 import com.victory.apartment.repository.RoomRepository;
 import com.victory.apartment.repository.AppNotificationRepository;
 import com.victory.apartment.service.ActivityLogService;
+import com.victory.apartment.service.LeaseService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -39,16 +42,38 @@ public class BookingController {
     private final RoomRepository roomRepo;
     private final AppNotificationRepository notifRepo;
     private final ActivityLogService logService;
+    private final LeaseService leaseService;
 
     public BookingController(
             BookingRepository repo,
             RoomRepository roomRepo,
             AppNotificationRepository notifRepo,
-            ActivityLogService logService) {
+            ActivityLogService logService,
+            LeaseService leaseService) {
         this.repo = repo;
         this.roomRepo = roomRepo;
         this.notifRepo = notifRepo;
         this.logService = logService;
+        this.leaseService = leaseService;
+    }
+
+    // A room can be Available while holding a future lease, so dates must be checked against active leases.
+    private void ensureNoLeaseConflict(Booking booking) {
+        if (booking.getRoomId() == null || booking.getCheckIn() == null || booking.getCheckOut() == null) return;
+        Map<String, Object> conflict;
+        try {
+            conflict = leaseService.checkConflict(booking.getRoomId(), booking.getCheckIn(), booking.getCheckOut(), null);
+        } catch (DateTimeParseException ex) {
+            return;
+        }
+        if (Boolean.TRUE.equals(conflict.get("hasConflict"))) {
+            Lease lease = (Lease) conflict.get("conflictingLease");
+            throw new BookingConflictException(
+                "LEASE_DATE_CONFLICT",
+                String.format("ห้องนี้มีสัญญาเช่าช่วง %s ถึง %s แล้ว กรุณาเปลี่ยนช่วงวันที่หรือเลือกห้องว่างอื่น",
+                        lease.getCheckInDate(), lease.getCheckOutDate())
+            );
+        }
     }
 
     @GetMapping
@@ -126,6 +151,7 @@ public class BookingController {
                 }
             }
         }
+        ensureNoLeaseConflict(booking);
 
         Booking saved = repo.save(booking);
 
@@ -149,8 +175,8 @@ public class BookingController {
     public ResponseEntity<Booking> cancelBooking(@PathVariable String id) {
         return repo.findByIdForUpdate(id).map(booking -> {
             if (booking.getLeaseId() != null) {
-                throw new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.CONFLICT, "This booking already has a lease. Manage it from Tenants.");
+                throw new BookingConflictException(
+                        "BOOKING_HAS_LEASE", "This booking already has a lease. Manage it from Tenants.");
             }
             booking.setStatus("Cancelled");
             if (booking.getRoomId() != null) {
@@ -172,9 +198,10 @@ public class BookingController {
         return repo.findByIdForUpdate(id).map(booking -> {
             String newStatus = req.get("status");
             if (booking.getLeaseId() != null && !"Completed".equals(newStatus)) {
-                throw new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.CONFLICT, "This booking already has a lease. Manage it from Tenants.");
+                throw new BookingConflictException(
+                        "BOOKING_HAS_LEASE", "This booking already has a lease. Manage it from Tenants.");
             }
+            if ("Approved".equals(newStatus)) ensureNoLeaseConflict(booking);
             booking.setStatus(newStatus);
 
             if ("Approved".equals(newStatus) && booking.getRoomId() != null) {

@@ -144,7 +144,7 @@ public class BookingLeaseService {
         lease.setBillingCycle("monthly");
         lease.setDepositAmount(rent * 2);
         lease.setNotes("Created from approved booking " + booking.getBookingNo());
-        Map<String, Object> result = leases.saveLease(lease);
+        Map<String, Object> result = leases.saveLease(lease, booking.getId());
         if (!Boolean.TRUE.equals(result.get("success"))) {
             // Roll back tenant, lease, room and booking together if assignment fails.
             throw new LeaseSubmissionException(HttpStatus.CONFLICT, "LEASE_CONFLICT", (String) result.get("message"));

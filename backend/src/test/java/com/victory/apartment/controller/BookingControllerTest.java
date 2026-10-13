@@ -7,6 +7,7 @@ import com.victory.apartment.repository.AppNotificationRepository;
 import com.victory.apartment.repository.BookingRepository;
 import com.victory.apartment.repository.RoomRepository;
 import com.victory.apartment.service.ActivityLogService;
+import com.victory.apartment.service.LeaseService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -18,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -46,6 +48,9 @@ public class BookingControllerTest {
     @MockBean
     private ActivityLogService logService;
 
+    @MockBean
+    private LeaseService leaseService;
+
     @Autowired
     private ObjectMapper objectMapper;
 
@@ -65,6 +70,8 @@ public class BookingControllerTest {
         mockRoom = new Room();
         mockRoom.setId("rm-123");
         mockRoom.setStatus("Available");
+
+        Mockito.when(leaseService.checkConflict(any(), any(), any(), any())).thenReturn(Map.of("hasConflict", false));
     }
 
     /**

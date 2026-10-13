@@ -40,9 +40,10 @@ export const BookingManagement: React.FC = () => {
   };
 
   const handleStatusUpdate = async (bookingId: string, status: string) => {
-    const updated = await updateBookingStatus(bookingId, status);
-    if (!updated) {
-      toast.error('Unable to update booking status. Manage existing leases from Tenants.');
+    try {
+      await updateBookingStatus(bookingId, status);
+    } catch (err) {
+      toast.error((err as Error).message || 'Unable to update booking status. Manage existing leases from Tenants.');
       return;
     }
     toast.success(`Booking status updated to ${status}`);

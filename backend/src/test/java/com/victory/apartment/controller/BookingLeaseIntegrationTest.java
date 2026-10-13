@@ -294,4 +294,80 @@ class BookingLeaseIntegrationTest {
         mvc.perform(post("/api/auth/logout").session(session)).andExpect(status().isNoContent());
         assertThat(session.isInvalid()).isTrue();
     }
+
+    private Lease activeLease(String tenantName, LocalDate start, LocalDate end) {
+        Lease lease = new Lease();
+        lease.setId("ls-" + UUID.randomUUID());
+        lease.setTenantId("t-" + tenantName);
+        lease.setTenantName(tenantName);
+        lease.setRoomId(room.getId());
+        lease.setRoomNumber(room.getRoomNumber());
+        lease.setCheckInDate(start);
+        lease.setCheckOutDate(end);
+        lease.setStatus("Active");
+        return leases.save(lease);
+    }
+
+    @Test
+    void terminatingLeaseHandsRoomToAnotherActiveLeaseCoveringToday() throws Exception {
+        LocalDate today = LocalDate.now();
+        Lease ending = activeLease("Ending", today.minusMonths(6), today.plusMonths(6));
+        activeLease("Current", today.minusDays(1), today.plusYears(1));
+        mvc.perform(put("/api/leases/" + ending.getId() + "/terminate")).andExpect(status().isOk());
+        Room saved = rooms.findById(room.getId()).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo("Occupied");
+        assertThat(saved.getCurrentTenantName()).isEqualTo("Current");
+        assertThat(saved.getCurrentTenantId()).isEqualTo("t-Current");
+    }
+
+    @Test
+    void terminatingLeaseWithOnlyFutureLeaseLeftFreesRoomButBlocksOverlappingBooking() throws Exception {
+        booking.setStatus("Cancelled");
+        bookings.save(booking);
+        LocalDate today = LocalDate.now();
+        Lease ending = activeLease("Ending", today.minusMonths(1), today.plusMonths(11));
+        activeLease("Future", today.plusYears(1), today.plusYears(2));
+        mvc.perform(put("/api/leases/" + ending.getId() + "/terminate")).andExpect(status().isOk());
+        Room saved = rooms.findById(room.getId()).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo("Available");
+        assertThat(saved.getCurrentTenantName()).isNull();
+
+        Map<String, String> overlapping = Map.of("roomId", room.getId(), "guestName", "Other", "guestEmail", "other@example.com",
+                "checkIn", today.plusMonths(2).toString(), "checkOut", today.plusMonths(14).toString());
+        mvc.perform(post("/api/bookings").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(overlapping)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LEASE_DATE_CONFLICT"));
+
+        Map<String, String> beforeFuture = Map.of("roomId", room.getId(), "guestName", "Other", "guestEmail", "other@example.com",
+                "checkIn", today.plusMonths(2).toString(), "checkOut", today.plusMonths(8).toString());
+        mvc.perform(post("/api/bookings").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(beforeFuture)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void adminLeaseThatOverlapsApprovedBookingIsRejected() throws Exception {
+        Map<String, Object> overlapping = Map.of("tenantId", "t-walk-in", "tenantName", "Walk-in", "roomId", room.getId(), "roomNumber", room.getRoomNumber(),
+                "checkInDate", "2027-01-01", "checkOutDate", "2027-06-01", "rentAmount", 5000);
+        mvc.perform(post("/api/leases").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(overlapping)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString(booking.getBookingNo())));
+
+        Map<String, Object> afterBooking = Map.of("tenantId", "t-walk-in", "tenantName", "Walk-in", "roomId", room.getId(), "roomNumber", room.getRoomNumber(),
+                "checkInDate", "2027-12-01", "checkOutDate", "2028-06-01", "rentAmount", 5000);
+        mvc.perform(post("/api/leases").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(afterBooking)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void approvingBookingThatOverlapsActiveLeaseIsRejected() throws Exception {
+        booking.setStatus("Pending");
+        bookings.save(booking);
+        room.setStatus("Available");
+        rooms.save(room);
+        activeLease("Holder", LocalDate.of(2027, 6, 1), LocalDate.of(2028, 6, 1));
+        mvc.perform(put("/api/bookings/" + booking.getId() + "/status")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"Approved\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LEASE_DATE_CONFLICT"));
+        assertThat(bookings.findById(booking.getId()).orElseThrow().getStatus()).isEqualTo("Pending");
+        assertThat(rooms.findById(room.getId()).orElseThrow().getStatus()).isEqualTo("Available");
+    }
 }
