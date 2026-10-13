@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { RoomCard } from '../../components/common/RoomCard';
-import { Room } from '../../types';
-import { getRooms } from '../../services/api';
+import { Building, Room } from '../../types';
+import { getBuildings, getRooms } from '../../services/api';
 import { useLanguage } from '../../context/LanguageContext';
 import { Link } from 'react-router-dom';
 
 export const Rooms: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [buildings, setBuildings] = useState<Building[]>([]);
   const [loading, setLoading] = useState(true);
   const [buildingFilter, setBuildingFilter] = useState<string>('all');
   const [floorFilter, setFloorFilter] = useState<string>('all');
@@ -18,8 +19,12 @@ export const Rooms: React.FC = () => {
   useEffect(() => {
     const fetchRooms = async () => {
       try {
-        const data = await getRooms();
+        const [data, buildingData] = await Promise.all([
+          getRooms(),
+          getBuildings().catch(() => [] as Building[]),
+        ]);
         setRooms(data);
+        setBuildings(buildingData);
       } catch (err) {
         console.error('Failed to fetch rooms:', err);
       } finally {
@@ -28,6 +33,26 @@ export const Rooms: React.FC = () => {
     };
     fetchRooms();
   }, []);
+
+  const buildingOptions = [...buildings];
+  if (!buildingOptions.some(building => building.id === 'bld-1')) {
+    buildingOptions.push({
+      id: 'bld-1',
+      name: language === 'th' ? 'อาคาร A' : 'Building A',
+      code: 'A',
+      floors: 0,
+      totalRooms: 0,
+    });
+  }
+  if (!buildingOptions.some(building => building.id === 'bld-2')) {
+    buildingOptions.push({
+      id: 'bld-2',
+      name: language === 'th' ? 'อาคาร B' : 'Building B',
+      code: 'B',
+      floors: 0,
+      totalRooms: 0,
+    });
+  }
 
   const filteredRooms = rooms.filter(room => {
     // Search query filter
@@ -41,9 +66,14 @@ export const Rooms: React.FC = () => {
 
     // Building filter
     if (buildingFilter !== 'all') {
-      const isBld2 = room.buildingId === 'bld-2' || room.roomNumber.startsWith('B');
-      if (buildingFilter === 'bld-2' && !isBld2) return false;
-      if (buildingFilter === 'bld-1' && isBld2) return false;
+      if (room.buildingId) {
+        if (room.buildingId !== buildingFilter) return false;
+      } else {
+        const selectedBuilding = buildingOptions.find(building => building.id === buildingFilter);
+        const roomNumber = (room.roomNumber || '').toUpperCase();
+        const buildingCode = (selectedBuilding?.code || '').trim().toUpperCase();
+        if (!buildingCode || !roomNumber.startsWith(buildingCode)) return false;
+      }
     }
 
     // Floor filter
@@ -98,9 +128,10 @@ export const Rooms: React.FC = () => {
             onChange={(e) => setBuildingFilter(e.target.value)}
             className="px-4 py-2 text-xs font-semibold rounded-full bg-nike-soft-cloud dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card text-nike-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-nike-ink dark:focus:ring-white transition-all cursor-pointer font-bold text-blue-600 dark:text-blue-400"
           >
-            <option value="all">{t('filter.allBuildings')}</option>
-            <option value="bld-1">{t('filter.buildingA')}</option>
-            <option value="bld-2">{t('filter.buildingB')}</option>
+            <option value="all">{language === 'th' ? 'ทุกอาคาร/ตึก' : 'All Buildings'}</option>
+            {buildingOptions.map(building => (
+              <option key={building.id} value={building.id}>{building.name}</option>
+            ))}
           </select>
 
           {/* Floor selector */}
@@ -158,7 +189,19 @@ export const Rooms: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {filteredRooms.map(room => (
-            <RoomCard key={room.id} room={room} />
+            <RoomCard
+              key={room.id}
+              room={room}
+              buildingLabel={room.buildingName
+                || buildings.find(building => building.id === room.buildingId)?.name
+                || (room.buildingId === 'bld-2'
+                  ? 'อาคารเสริม B'
+                  : room.buildingId === 'bld-1'
+                    ? 'อาคาร A'
+                    : /^[A-Za-z]/.test(room.roomNumber || '')
+                      ? `อาคาร ${room.roomNumber[0].toUpperCase()}`
+                      : 'อาคาร')}
+            />
           ))}
         </div>
       )}

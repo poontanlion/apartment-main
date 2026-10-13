@@ -155,9 +155,14 @@ export const UtilityReceiptManagement: React.FC = () => {
     let matchesBuilding = true;
     if (buildingFilter !== 'All') {
       const room = rooms.find(r => r.id === b.roomId || r.roomNumber === b.roomNumber);
-      const isBldB = (room && (room.buildingId === 'bld-2' || (room.roomNumber && room.roomNumber.toUpperCase().startsWith('B')))) || (b.roomNumber && b.roomNumber.toUpperCase().startsWith('B'));
-      if (buildingFilter === 'bld-2') matchesBuilding = Boolean(isBldB);
-      else if (buildingFilter === 'bld-1') matchesBuilding = !isBldB;
+      if (room?.buildingId) {
+        matchesBuilding = room.buildingId === buildingFilter;
+      } else {
+        const isBldB = (room?.roomNumber || b.roomNumber || '').toUpperCase().startsWith('B');
+        if (buildingFilter === 'bld-2') matchesBuilding = isBldB;
+        else if (buildingFilter === 'bld-1') matchesBuilding = !isBldB;
+        else matchesBuilding = false;
+      }
     }
 
     return matchesSearch && matchesStatus && matchesMonth && matchesBuilding;

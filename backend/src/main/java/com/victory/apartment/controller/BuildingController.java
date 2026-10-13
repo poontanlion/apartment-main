@@ -4,6 +4,7 @@ import com.victory.apartment.model.Building;
 import com.victory.apartment.repository.BuildingRepository;
 import com.victory.apartment.service.ActivityLogService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -120,10 +121,16 @@ public class BuildingController {
     }
 
     @DeleteMapping("/{id}")
+    @Transactional
     public ResponseEntity<Void> delete(@PathVariable String id) {
         return repo.findById(id).map(bld -> {
+            // Cascade delete all rooms belonging to this building first
+            java.util.List<com.victory.apartment.model.Room> buildingRooms = roomRepo.findByBuildingId(id);
+            if (!buildingRooms.isEmpty()) {
+                roomRepo.deleteAll(buildingRooms);
+            }
             repo.deleteById(id);
-            logService.log("Building Deleted", "Deleted building " + bld.getName() + " (" + id + ")");
+            logService.log("Building Deleted", "Deleted building " + bld.getName() + " (" + id + ") with " + buildingRooms.size() + " rooms");
             return ResponseEntity.ok().<Void>build();
         }).orElse(ResponseEntity.notFound().build());
     }

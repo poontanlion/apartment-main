@@ -31,10 +31,11 @@ export const MaintenanceManagement: React.FC = () => {
   const isRoomInBuilding = (roomId?: string, roomNumber?: string, targetBldId: string = buildingFilter) => {
     if (targetBldId === 'All') return true;
     const rm = rooms.find(r => (roomId && r.id === roomId) || (roomNumber && r.roomNumber === roomNumber));
-    const isBldB = (rm && (rm.buildingId === 'bld-2' || (rm.roomNumber && rm.roomNumber.toUpperCase().startsWith('B')))) || (roomNumber && roomNumber.toUpperCase().startsWith('B'));
+    if (rm?.buildingId) return rm.buildingId === targetBldId;
+    const isBldB = ((rm?.roomNumber || roomNumber || '').toUpperCase().startsWith('B'));
     if (targetBldId === 'bld-2') return Boolean(isBldB);
     if (targetBldId === 'bld-1') return !isBldB;
-    return true;
+    return false;
   };
 
   // Modals
