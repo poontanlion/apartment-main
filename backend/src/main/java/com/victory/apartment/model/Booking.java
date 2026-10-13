@@ -24,6 +24,8 @@ public class Booking {
     private Double totalPrice;
     private String specialRequests;
     private String status; // Pending, Approved, Rejected, Cancelled
+    private String tenantId;
+    private String leaseId;
     private LocalDateTime createdAt;
 
     public Booking() {}
@@ -54,6 +56,10 @@ public class Booking {
     public void setSpecialRequests(String specialRequests) { this.specialRequests = specialRequests; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getTenantId() { return tenantId; }
+    public void setTenantId(String tenantId) { this.tenantId = tenantId; }
+    public String getLeaseId() { return leaseId; }
+    public void setLeaseId(String leaseId) { this.leaseId = leaseId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

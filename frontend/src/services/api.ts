@@ -1,7 +1,9 @@
 import {
   Room, Tenant, Lease, UtilityBill, BillStatus, MaintenanceTask, SupplyItem,
-  MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building
+  MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication
 } from '../types';
+import { BookingLeaseError } from '../utils/bookingLeaseErrors';
+import { BookingRequestError } from '../utils/bookingErrors';
 
 const API_BASE = '/api';
 
@@ -325,10 +327,56 @@ export const getUserBookings = async (email: string): Promise<Booking[]> => {
 };
 
 export const createBooking = async (bookingData: Partial<Booking>): Promise<Booking> => {
-  return fetchJson<Booking>(`${API_BASE}/bookings`, {
-    method: 'POST',
-    body: JSON.stringify(bookingData),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/bookings`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bookingData),
+    });
+  } catch {
+    throw new BookingRequestError('NETWORK_ERROR', 0);
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const code = body?.code || (res.status === 409 ? 'BOOKING_CONFLICT'
+      : res.status === 401 ? 'AUTH_REQUIRED' : res.status >= 500 ? 'SERVER_ERROR' : 'REQUEST_FAILED');
+    throw new BookingRequestError(code, res.status, body?.message || body?.error || res.statusText);
+  }
+  return res.json();
+};
+
+export const createBookingLease = async (bookingId: string, application: BookingLeaseApplication): Promise<Booking> => {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/bookings/${encodeURIComponent(bookingId)}/lease`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(application),
+    });
+  } catch {
+    throw new BookingLeaseError('NETWORK_ERROR', 0);
+  }
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    const statusCodes: Record<number, string> = {
+      400: 'INVALID_REQUEST', 401: 'AUTH_REQUIRED', 403: 'NOT_BOOKING_OWNER',
+      404: 'LEASE_API_UNAVAILABLE', 405: 'LEASE_API_UNAVAILABLE', 409: 'LEASE_CONFLICT', 422: 'VALIDATION_FAILED',
+    };
+    const code = error.code || (res.status >= 500 ? 'SERVER_ERROR'
+      : error.message && ![401, 403, 404, 405].includes(res.status) ? 'REQUEST_FAILED'
+      : statusCodes[res.status] || 'SERVER_ERROR');
+    throw new BookingLeaseError(code, res.status, error.message || '', error.fieldErrors || {});
+  }
+  try {
+    return await res.json();
+  } catch {
+    throw new BookingLeaseError('SERVER_ERROR', res.status);
+  }
+};
+
+export const logoutApiUser = async (): Promise<void> => {
+  const res = await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+  if (!res.ok) throw new Error('Unable to sign out');
 };
 
 export const updateBookingStatus = async (bookingId: string, status: string): Promise<Booking | null> => {

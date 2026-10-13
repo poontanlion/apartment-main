@@ -293,6 +293,9 @@ export const TenantManagement: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <Mail className="w-3.5 h-3.5" /> {tenant.email || '-'}
                 </div>
+                <div>
+                  {language === 'th' ? 'ผู้ติดต่อฉุกเฉิน' : 'Emergency Contact'}: {tenant.emergencyContact || '-'}
+                </div>
                 <div className="flex items-center gap-2">
                   <Home className="w-3.5 h-3.5" /> Assigned: <strong className="text-nike-ink dark:text-white">{tenant.unitNumber ? `Unit ${tenant.unitNumber}` : 'Unassigned'}</strong>
                 </div>

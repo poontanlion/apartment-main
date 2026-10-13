@@ -70,6 +70,8 @@ export interface Tenant {
   createdAt: string;
 }
 
+export type BookingLeaseApplication = Pick<Tenant, 'fullname' | 'phone' | 'email' | 'idCardPassport' | 'emergencyContact'>;
+
 export type LeaseStatus = 'Active' | 'Terminated' | 'Expired';
 
 export interface Lease {
@@ -204,6 +206,8 @@ export interface Booking {
   totalPrice: number;
   specialRequests?: string;
   status: string;
+  tenantId?: string;
+  leaseId?: string;
   createdAt: string;
 }
 

@@ -2,6 +2,7 @@ package com.victory.apartment.controller;
 
 import com.victory.apartment.model.AppUser;
 import com.victory.apartment.repository.AppUserRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,7 +22,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> credentials) {
+    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> credentials, HttpServletRequest request) {
         String email = credentials.getOrDefault("email", "").trim().toLowerCase();
         String password = credentials.getOrDefault("password", "").trim();
 
@@ -36,6 +37,7 @@ public class AuthController {
             userMap.put("role", "admin");
             response.put("success", true);
             response.put("user", userMap);
+            establishSession(request, "admin@victoryapartment.com");
             return ResponseEntity.ok(response);
         }
 
@@ -50,6 +52,7 @@ public class AuthController {
             userMap.put("role", dbUser.getRole());
             response.put("success", true);
             response.put("user", userMap);
+            establishSession(request, dbUser.getEmail());
             return ResponseEntity.ok(response);
         }
 
@@ -59,7 +62,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<Map<String, Object>> register(@RequestBody Map<String, String> data) {
+    public ResponseEntity<Map<String, Object>> register(@RequestBody Map<String, String> data, HttpServletRequest request) {
         String fullname = data.getOrDefault("fullname", "User").trim();
         String email = data.getOrDefault("email", "").trim().toLowerCase();
         String password = data.getOrDefault("password", "").trim();
@@ -90,7 +93,21 @@ public class AuthController {
 
         response.put("success", true);
         response.put("user", userMap);
+        establishSession(request, saved.getEmail());
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
+        var session = request.getSession(false);
+        if (session != null) session.invalidate();
+        return ResponseEntity.noContent().build();
+    }
+
+    private void establishSession(HttpServletRequest request, String email) {
+        request.getSession();
+        request.changeSessionId();
+        request.getSession().setAttribute("userEmail", email);
     }
 
     @PutMapping("/profile")

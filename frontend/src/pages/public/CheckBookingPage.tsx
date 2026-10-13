@@ -11,6 +11,7 @@ import {
   CreditCard, DoorOpen, ExternalLink, Home, Check, X
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { BookingLeaseForm } from '../../components/public/BookingLeaseForm';
 
 export const CheckBookingPage: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
@@ -22,6 +23,7 @@ export const CheckBookingPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [leaseBookingId, setLeaseBookingId] = useState<string | null>(null);
 
   // Load rooms data for matching unit photo and details
   useEffect(() => {
@@ -87,6 +89,12 @@ export const CheckBookingPage: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'Completed':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-nike-success text-white shadow-xs">
+            <CheckCircle2 className="w-3.5 h-3.5" /> {t('status.completed')}
+          </span>
+        );
       case 'Approved':
         return (
           <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-nike-success text-white shadow-xs">
@@ -204,6 +212,7 @@ export const CheckBookingPage: React.FC = () => {
         <div className="space-y-6">
           {bookings.map((booking) => {
             const matchedRoom = getRoomForBooking(booking);
+            const isOwnBooking = isAuthenticated && user?.email?.toLowerCase() === booking.guestEmail?.toLowerCase();
             return (
               <div
                 key={booking.id}
@@ -306,29 +315,31 @@ export const CheckBookingPage: React.FC = () => {
                       </span>
                     </div>
 
-                    {/* STEP 3: Approval & Unit Access */}
+                    {/* STEP 3: Lease agreement */}
                     <div className="space-y-1.5">
                       <div className={`w-7 h-7 rounded-full font-bold flex items-center justify-center mx-auto text-xs ${
-                        booking.status === 'Approved' || booking.status === 'Completed'
+                        booking.leaseId
                           ? 'bg-nike-success text-white'
                           : booking.status === 'Rejected' || booking.status === 'Cancelled'
                             ? 'bg-neutral-300 dark:bg-neutral-800 text-neutral-400'
                             : 'bg-neutral-300 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400'
                       }`}>
-                        {booking.status === 'Approved' || booking.status === 'Completed' ? <Check className="w-4 h-4" /> : '3'}
+                        {booking.leaseId ? <Check className="w-4 h-4" /> : '3'}
                       </div>
                       <span className={`block font-semibold ${
-                        booking.status === 'Approved' || booking.status === 'Completed'
+                        booking.leaseId
                           ? 'text-nike-success font-bold'
                           : 'text-nike-mute'
                       }`}>
-                        {booking.status === 'Approved' || booking.status === 'Completed'
-                          ? (language === 'th' ? 'อนุมัติ / พร้อมเข้าพัก' : 'Approved & Move-in')
-                          : (language === 'th' ? 'อนุมัติห้องพัก' : 'Room Approval')}
+                        {booking.leaseId
+                          ? (language === 'th' ? 'ทำสัญญาเช่าแล้ว' : 'Lease Created')
+                          : (language === 'th' ? 'ทำสัญญาเช่า' : 'Lease Agreement')}
                       </span>
                       <span className="text-[11px] text-nike-mute block">
-                        {booking.status === 'Approved' || booking.status === 'Completed'
+                        {booking.leaseId
                           ? (language === 'th' ? 'พร้อมเข้าใช้งานห้องพัก' : 'Ready for Move-in')
+                          : booking.status === 'Approved'
+                            ? (language === 'th' ? 'กรอกข้อมูลเพื่อทำสัญญาเช่า' : 'Complete your tenant details')
                           : booking.status === 'Pending'
                             ? (language === 'th' ? 'จะปลดล็อคหลังอนุมัติ' : 'Unlocks After Approval')
                             : (language === 'th' ? 'สิ้นสุดกระบวนการ' : 'Process Terminated')}
@@ -374,6 +385,21 @@ export const CheckBookingPage: React.FC = () => {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
+                    {booking.status === 'Approved' && !booking.leaseId && isOwnBooking && (
+                      <button
+                        type="button"
+                        onClick={() => setLeaseBookingId(leaseBookingId === booking.id ? null : booking.id)}
+                        aria-expanded={leaseBookingId === booking.id}
+                        className="px-4 py-2 rounded-full text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all cursor-pointer"
+                      >
+                        {language === 'th' ? 'ทำสัญญาเช่าใหม่' : 'Create New Lease Agreement'}
+                      </button>
+                    )}
+                    {booking.status === 'Approved' && !booking.leaseId && !isAuthenticated && (
+                      <Link to="/login" className="px-4 py-2 rounded-full text-xs font-bold bg-blue-600 text-white">
+                        {language === 'th' ? 'เข้าสู่ระบบเพื่อทำสัญญาเช่า' : 'Sign in to create your lease'}
+                      </Link>
+                    )}
                     {/* APPROVED / COMPLETED: Show My Unit button */}
                     {(booking.status === 'Approved' || booking.status === 'Completed') && (
                       <Link
@@ -418,6 +444,24 @@ export const CheckBookingPage: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                {booking.leaseId && (
+                  <p role="status" className="flex items-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 p-4 text-sm text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    {language === 'th' ? 'บันทึกสัญญาเช่าเรียบร้อยแล้ว' : 'Lease agreement completed'}
+                  </p>
+                )}
+                {leaseBookingId === booking.id && booking.status === 'Approved' && !booking.leaseId && isOwnBooking && (
+                  <BookingLeaseForm
+                    booking={booking}
+                    rentAmount={booking.totalPrice ?? matchedRoom?.price ?? 0}
+                    onCancel={() => setLeaseBookingId(null)}
+                    onSaved={saved => {
+                      setBookings(prev => prev.map(b => b.id === saved.id ? saved : b));
+                      setLeaseBookingId(null);
+                    }}
+                  />
+                )}
 
               </div>
             );

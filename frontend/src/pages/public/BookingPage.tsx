@@ -7,6 +7,7 @@ import { Maximize2, BedDouble, Users, CalendarCheck, ArrowLeft } from 'lucide-re
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { BookingRequestError, bookingErrorMessage } from '../../utils/bookingErrors';
 
 export const BookingPage: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -16,6 +17,8 @@ export const BookingPage: React.FC = () => {
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [bookingConflict, setBookingConflict] = useState(false);
 
   // Move-in must be at least tomorrow (pending admin approval)
   const tomorrow = new Date();
@@ -53,6 +56,9 @@ export const BookingPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitError('');
+    setBookingConflict(false);
     if (!formData.guestName || !formData.guestPhone || !formData.guestEmail) {
       toast.error(language === 'th' ? 'กรุณากรอกข้อมูลการติดต่อให้ครบถ้วน' : 'Please fill in all required contact information');
       return;
@@ -76,8 +82,10 @@ export const BookingPage: React.FC = () => {
       toast.success(language === 'th' ? `ส่งคำขอจองห้องเรียบร้อยแล้ว! รหัสอ้างอิง: ${res.bookingNo}` : `Booking request submitted! Reference: ${res.bookingNo}`);
       navigate('/payment/' + res.id);
 
-    } catch (err: any) {
-      const msg = err.message || (language === 'th' ? 'ไม่สามารถส่งคำขอจองห้องได้' : 'Unable to submit booking request');
+    } catch (err) {
+      const msg = bookingErrorMessage(err, language === 'th');
+      setSubmitError(msg);
+      setBookingConflict(err instanceof BookingRequestError && err.status === 409);
       toast.error(msg, { duration: 6000 });
     } finally {
       setSubmitting(false);
@@ -228,6 +236,22 @@ export const BookingPage: React.FC = () => {
             />
           </div>
         </div>
+
+        {submitError && (
+          <div className="rounded-2xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 p-4 space-y-3">
+            <p role="alert" className="text-sm text-rose-700 dark:text-rose-300">{submitError}</p>
+            {bookingConflict && (
+              <div className="flex flex-wrap gap-3 text-sm font-semibold">
+                <Link to="/check-booking" className="text-blue-600 dark:text-blue-400 underline">
+                  {language === 'th' ? 'ตรวจการจองเดิม / ทำสัญญาเช่า' : 'Check Existing Booking / Create Lease'}
+                </Link>
+                <Link to="/rooms" className="text-blue-600 dark:text-blue-400 underline">
+                  {language === 'th' ? 'เลือกห้องว่างอื่น' : 'Choose Another Room'}
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
 
         <button
           type="submit"

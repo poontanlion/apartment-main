@@ -107,7 +107,49 @@ public class BookingControllerTest {
         mockMvc.perform(post("/api/bookings")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(mockBooking)))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ROOM_OCCUPIED"))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    void createBooking_MaintenanceExplainsWhyRoomCannotBeBooked() throws Exception {
+        mockRoom.setStatus("Maintenance");
+        Mockito.when(roomRepository.findById("rm-123")).thenReturn(Optional.of(mockRoom));
+        mockMvc.perform(post("/api/bookings").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(mockBooking)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ROOM_MAINTENANCE"))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    void createBooking_OverlappingApprovedBookingExplainsDateConflict() throws Exception {
+        Mockito.when(roomRepository.findById("rm-123")).thenReturn(Optional.of(mockRoom));
+        Booking existing = new Booking();
+        existing.setStatus("Approved");
+        existing.setCheckIn("2026-09-20");
+        existing.setCheckOut("2027-09-20");
+        Mockito.when(bookingRepository.findByRoomIdAndStatusIn(any(), any())).thenReturn(java.util.List.of(existing));
+        mockMvc.perform(post("/api/bookings").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(mockBooking)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("BOOKING_DATE_CONFLICT"))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    void createBooking_NonOverlappingApprovedBookingStillAllowed() throws Exception {
+        mockRoom.setStatus("Reserved");
+        Mockito.when(roomRepository.findById("rm-123")).thenReturn(Optional.of(mockRoom));
+        Booking existing = new Booking();
+        existing.setCheckIn("2025-09-20");
+        existing.setCheckOut("2026-09-20");
+        Mockito.when(bookingRepository.findByRoomIdAndStatusIn(any(), any())).thenReturn(java.util.List.of(existing));
+        Mockito.when(bookingRepository.save(any(Booking.class))).thenReturn(mockBooking);
+        mockMvc.perform(post("/api/bookings").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(mockBooking)))
+                .andExpect(status().isOk());
     }
 
     /**
@@ -115,7 +157,7 @@ public class BookingControllerTest {
      */
     @Test
     void cancelBooking_Success() throws Exception {
-        Mockito.when(bookingRepository.findById("bk-123")).thenReturn(Optional.of(mockBooking));
+        Mockito.when(bookingRepository.findByIdForUpdate("bk-123")).thenReturn(Optional.of(mockBooking));
         Mockito.when(bookingRepository.save(any(Booking.class))).thenReturn(mockBooking);
 
         mockMvc.perform(put("/api/bookings/bk-123/cancel"))
@@ -128,7 +170,7 @@ public class BookingControllerTest {
      */
     @Test
     void cancelBooking_NotFound() throws Exception {
-        Mockito.when(bookingRepository.findById("bk-999")).thenReturn(Optional.empty());
+        Mockito.when(bookingRepository.findByIdForUpdate("bk-999")).thenReturn(Optional.empty());
 
         mockMvc.perform(put("/api/bookings/bk-999/cancel"))
                 .andExpect(status().isNotFound());

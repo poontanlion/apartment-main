@@ -5,7 +5,7 @@ import { APIRequestContext, Page, expect } from '@playwright/test';
  * quickly and reliably, and keep the browser steps focused on what is being tested.
  */
 
-export const API = 'http://localhost:8080/api';
+export const API = `${process.env.E2E_BACKEND_URL || 'http://localhost:8080'}/api`;
 
 export interface ResidentAccount {
   id: string;

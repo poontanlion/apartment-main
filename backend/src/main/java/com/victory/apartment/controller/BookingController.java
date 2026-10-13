@@ -7,6 +7,8 @@ import com.victory.apartment.repository.RoomRepository;
 import com.victory.apartment.repository.AppNotificationRepository;
 import com.victory.apartment.service.ActivityLogService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -17,6 +19,21 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/bookings")
 public class BookingController {
+
+    private static class BookingConflictException extends ResponseStatusException {
+        private final String code;
+
+        BookingConflictException(String code, String message) {
+            super(HttpStatus.CONFLICT, message);
+            this.code = code;
+        }
+    }
+
+    @ExceptionHandler(BookingConflictException.class)
+    public ResponseEntity<Map<String, String>> handleBookingConflict(BookingConflictException exception) {
+        return ResponseEntity.status(exception.getStatusCode())
+                .body(Map.of("code", exception.code, "message", exception.getReason()));
+    }
 
     private final BookingRepository repo;
     private final RoomRepository roomRepo;
@@ -78,14 +95,14 @@ public class BookingController {
         if (booking.getRoomId() != null) {
             roomRepo.findById(booking.getRoomId()).ifPresent(room -> {
                 if ("Occupied".equalsIgnoreCase(room.getStatus())) {
-                    throw new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.CONFLICT,
-                        "ห้องพักนี้มีผู้เช่าพักอาศัยอยู่แล้ว ไม่สามารถส่งคำขอจองได้"
+                    throw new BookingConflictException(
+                        "ROOM_OCCUPIED",
+                        "ห้องพักนี้มีผู้เช่าพักอาศัยอยู่แล้ว กรุณาเลือกห้องว่างอื่น หากเป็นการจองของคุณให้ตรวจสถานะการจองเดิม"
                     );
                 } else if ("Maintenance".equalsIgnoreCase(room.getStatus())) {
-                    throw new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.CONFLICT,
-                        "ห้องพักนี้อยู่ระหว่างปิดปรับปรุง/ซ่อมบำรุง ไม่สามารถจองได้"
+                    throw new BookingConflictException(
+                        "ROOM_MAINTENANCE",
+                        "ห้องพักนี้อยู่ระหว่างปรับปรุงหรือซ่อมบำรุง กรุณาเลือกห้องว่างอื่นหรือติดต่อผู้ดูแล"
                     );
                 }
             });
@@ -102,9 +119,9 @@ public class BookingController {
                             && booking.getCheckOut().compareTo(existing.getCheckIn()) > 0;
                 }
                 if (overlaps) {
-                    throw new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.CONFLICT,
-                        "ห้องพักนี้ได้รับการอนุมัติการจองแล้วในช่วงวันดังกล่าว กรุณาเลือกห้องอื่น"
+                    throw new BookingConflictException(
+                        "BOOKING_DATE_CONFLICT",
+                        "วันที่เลือกทับกับการจองที่อนุมัติแล้ว กรุณาเปลี่ยนช่วงวันที่หรือเลือกห้องว่างอื่น หากเป็นการจองของคุณให้ทำสัญญาจากการจองเดิม"
                     );
                 }
             }
@@ -128,8 +145,13 @@ public class BookingController {
     }
 
     @PutMapping("/{id}/cancel")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<Booking> cancelBooking(@PathVariable String id) {
-        return repo.findById(id).map(booking -> {
+        return repo.findByIdForUpdate(id).map(booking -> {
+            if (booking.getLeaseId() != null) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.CONFLICT, "This booking already has a lease. Manage it from Tenants.");
+            }
             booking.setStatus("Cancelled");
             if (booking.getRoomId() != null) {
                 roomRepo.findById(booking.getRoomId()).ifPresent(room -> {
@@ -145,9 +167,14 @@ public class BookingController {
     }
 
     @PutMapping("/{id}/status")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<Booking> updateStatus(@PathVariable String id, @RequestBody Map<String, String> req) {
-        return repo.findById(id).map(booking -> {
+        return repo.findByIdForUpdate(id).map(booking -> {
             String newStatus = req.get("status");
+            if (booking.getLeaseId() != null && !"Completed".equals(newStatus)) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.CONFLICT, "This booking already has a lease. Manage it from Tenants.");
+            }
             booking.setStatus(newStatus);
 
             if ("Approved".equals(newStatus) && booking.getRoomId() != null) {

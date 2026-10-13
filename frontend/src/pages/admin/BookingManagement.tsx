@@ -40,7 +40,11 @@ export const BookingManagement: React.FC = () => {
   };
 
   const handleStatusUpdate = async (bookingId: string, status: string) => {
-    await updateBookingStatus(bookingId, status);
+    const updated = await updateBookingStatus(bookingId, status);
+    if (!updated) {
+      toast.error('Unable to update booking status. Manage existing leases from Tenants.');
+      return;
+    }
     toast.success(`Booking status updated to ${status}`);
     fetchBookings();
   };
@@ -130,6 +134,7 @@ export const BookingManagement: React.FC = () => {
                   <td className="p-4">
                     <select
                       value={b.status}
+                      disabled={Boolean(b.leaseId)}
                       onChange={e => handleStatusUpdate(b.id, e.target.value)}
                       className={`p-1.5 text-[12px] font-semibold rounded-full border-0 focus:outline-none cursor-pointer ${
                         b.status === 'Approved' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :

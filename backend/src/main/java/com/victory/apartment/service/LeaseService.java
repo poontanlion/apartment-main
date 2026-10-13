@@ -54,12 +54,20 @@ public class LeaseService {
         return result;
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public Map<String, Object> saveLease(Lease leaseData) {
         Map<String, Object> result = new HashMap<>();
 
         if (leaseData.getRoomId() == null || leaseData.getCheckInDate() == null || leaseData.getCheckOutDate() == null) {
             result.put("success", false);
             result.put("message", "Room, check-in date, and check-out date are required.");
+            return result;
+        }
+
+        // Serialize assignments to the same room, including booking-to-lease submissions.
+        if (roomRepo.findByIdForUpdate(leaseData.getRoomId()).isEmpty()) {
+            result.put("success", false);
+            result.put("message", "Room not found.");
             return result;
         }
 

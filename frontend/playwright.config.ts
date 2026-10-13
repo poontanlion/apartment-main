@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const backendUrl = process.env.E2E_BACKEND_URL || 'http://localhost:8080';
+const frontendUrl = process.env.E2E_FRONTEND_URL || 'http://localhost:3000';
+
 /**
  * RESIDENT-PORTAL "TENANT JOURNEY" E2E SUITE
  *
@@ -19,7 +22,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: frontendUrl,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
@@ -32,16 +35,18 @@ export default defineConfig({
     {
       command: process.platform === 'win32' ? 'mvnw.cmd spring-boot:run' : './mvnw spring-boot:run',
       cwd: '../backend',
-      url: 'http://localhost:8080/api/rooms',
+      url: `${backendUrl}/api/rooms`,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
       env: {
+        SERVER_PORT: new URL(backendUrl).port,
         ...(process.env.JAVA_HOME ? {} : { JAVA_HOME: 'C:\\Users\\wachi\\.jdks\\ms-17.0.20.1' }),
       },
     },
     {
-      command: 'npm run dev',
-      url: 'http://localhost:3000',
+      command: `npm run dev -- --port ${new URL(frontendUrl).port} --strictPort`,
+      url: frontendUrl,
+      env: { VITE_API_TARGET: backendUrl },
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

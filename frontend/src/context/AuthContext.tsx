@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
-import { loginAdmin, registerApiUser, updateUserProfile } from '../services/api';
+import { loginAdmin, registerApiUser, updateUserProfile, logoutApiUser } from '../services/api';
 import { toast } from 'sonner';
 
 interface AuthContextType {
@@ -95,6 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    void logoutApiUser().catch(err => console.error('Failed to end server session:', err));
     setUser(null);
     toast.success('Logged out successfully');
   };
