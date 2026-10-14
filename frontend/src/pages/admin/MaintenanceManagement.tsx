@@ -9,9 +9,12 @@ import {
   getNotifications, addNotification
 } from '../../services/api';
 import { formatCurrency, formatDate, formatSuppliesSummary } from '../../utils/formatters';
-import { Wrench, Plus, Package, History, BellRing, CheckCircle2, Clock, Search, Pencil, Trash2, DollarSign } from 'lucide-react';
+import { Wrench, Plus, Package, History, BellRing, CheckCircle2, Clock, Search, Pencil, Trash2, DollarSign, Archive } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'sonner';
+
+// 'archived' is stored by the backend (MaintenanceTask.archived); declared locally so this page doesn't depend on the shared types file
+type TaskWithArchive = MaintenanceTask & { archived?: boolean };
 
 export const MaintenanceManagement: React.FC = () => {
   const { t, language } = useLanguage();
@@ -27,6 +30,9 @@ export const MaintenanceManagement: React.FC = () => {
   const [reminders, setReminders] = useState<ScheduledReminder[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [search, setSearch] = useState('');
+
+  // Archived work orders are hidden from the main list (they stay in the per-unit logs tab)
+  const activeTasks = tasks.filter(tk => !(tk as TaskWithArchive).archived);
 
   const isRoomInBuilding = (roomId?: string, roomNumber?: string, targetBldId: string = buildingFilter) => {
     if (targetBldId === 'All') return true;
@@ -286,6 +292,21 @@ export const MaintenanceManagement: React.FC = () => {
     }
   };
 
+  const handleArchiveTask = async (task: MaintenanceTask) => {
+    const confirmMsg = language === 'th'
+      ? 'ต้องการจัดเก็บงานซ่อมนี้ไปที่ประวัติซ่อมรายห้องใช่หรือไม่?'
+      : 'Archive this work order to the per-unit maintenance logs?';
+    if (!window.confirm(confirmMsg)) return;
+    try {
+      const payload: TaskWithArchive = { ...task, archived: true };
+      await saveMaintenanceTask(payload);
+      toast.success(language === 'th' ? 'จัดเก็บไปที่ประวัติซ่อมรายห้องเรียบร้อยแล้ว' : 'Archived to per-unit maintenance logs');
+      fetchData();
+    } catch {
+      toast.error(language === 'th' ? 'ไม่สามารถจัดเก็บรายการได้' : 'Failed to archive work order');
+    }
+  };
+
   const handleSaveSupply = async (e: React.FormEvent) => {
     e.preventDefault();
     await saveSupply(supplyFormData);
@@ -431,7 +452,7 @@ export const MaintenanceManagement: React.FC = () => {
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                   }`}
                 >
-                  {t('common.all')} ({tasks.filter(t => isRoomInBuilding(t.roomId, t.roomNumber)).length})
+                  {t('common.all')} ({activeTasks.filter(t => isRoomInBuilding(t.roomId, t.roomNumber)).length})
                 </button>
                 <button
                   onClick={() => setOccupancyFilter('Occupied')}
@@ -441,7 +462,7 @@ export const MaintenanceManagement: React.FC = () => {
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                   }`}
                 >
-                  {language === 'th' ? 'ห้องมีคนเช่า' : 'Occupied Units'} ({tasks.filter(t => isRoomInBuilding(t.roomId, t.roomNumber) && getTaskOccupancy(t) === 'Occupied').length})
+                  {language === 'th' ? 'ห้องมีคนเช่า' : 'Occupied Units'} ({activeTasks.filter(t => isRoomInBuilding(t.roomId, t.roomNumber) && getTaskOccupancy(t) === 'Occupied').length})
                 </button>
                 <button
                   onClick={() => setOccupancyFilter('Vacant/Common')}
@@ -451,7 +472,7 @@ export const MaintenanceManagement: React.FC = () => {
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                   }`}
                 >
-                  {language === 'th' ? 'ห้องว่าง' : 'Vacant / Common'} ({tasks.filter(t => isRoomInBuilding(t.roomId, t.roomNumber) && getTaskOccupancy(t) === 'Vacant/Common').length})
+                  {language === 'th' ? 'ห้องว่าง' : 'Vacant / Common'} ({activeTasks.filter(t => isRoomInBuilding(t.roomId, t.roomNumber) && getTaskOccupancy(t) === 'Vacant/Common').length})
                 </button>
               </div>
             </div>
@@ -495,7 +516,7 @@ export const MaintenanceManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-nike-hairline/60 dark:divide-nike-dark-card/60">
-                {tasks
+                {activeTasks
                   .filter(task => {
                     if (!isRoomInBuilding(task.roomId, task.roomNumber)) return false;
                     if (occupancyFilter === 'Occupied') return getTaskOccupancy(task) === 'Occupied';
@@ -583,6 +604,21 @@ export const MaintenanceManagement: React.FC = () => {
                         <option value="In Progress">{t('status.inProgress')}</option>
                         <option value="Completed">{t('status.completed')}</option>
                       </select>
+                    </td>
+                    <td className="p-3 text-right">
+                      {task.status === 'Completed' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleArchiveTask(task)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition-all cursor-pointer"
+                          title={language === 'th' ? 'จัดเก็บไปที่ประวัติซ่อมรายห้อง' : 'Archive to per-unit maintenance logs'}
+                        >
+                          <Archive className="w-3.5 h-3.5" />
+                          {language === 'th' ? 'จัดเก็บ' : 'Archive'}
+                        </button>
+                      ) : (
+                        <span className="text-nike-stone">—</span>
+                      )}
                     </td>
                   </tr>
                 );
