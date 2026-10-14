@@ -123,6 +123,7 @@ public class MaintenanceController {
             if (incoming.getTotalCost() != null) existing.setTotalCost(incoming.getTotalCost());
             if (incoming.getSuppliesUsed() != null) existing.setSuppliesUsed(incoming.getSuppliesUsed());
             if (incoming.getOccupancyType() != null) existing.setOccupancyType(incoming.getOccupancyType());
+            if (incoming.getArchived() != null) existing.setArchived(incoming.getArchived());
 
             if ("Completed".equals(existing.getStatus()) && existing.getCompletedAt() == null) {
                 existing.setCompletedAt(LocalDateTime.now());
