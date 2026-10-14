@@ -175,7 +175,29 @@
      kubectl port-forward service/apartment-frontend-service 30080:80
      ```
      แล้วเปิดเบราว์เซอร์ไปที่ `http://localhost:30080`
-5. **คำสั่ง Cleanup เมื่อตรวจเสร็จ:**
+5. **การเปลี่ยน Docker Image หรือย้อนเวอร์ชัน:**
+   หากต้องการเปลี่ยนไปใช้ Image อื่น (เช่น ย้อนกลับไปใช้ Tag หรือ Git SHA เก่าบน Docker Hub):
+   - **วิธีที่ 1: เปลี่ยนผ่านคำสั่ง `kubectl set image`**
+     ```bash
+     kubectl set image deployment/apartment-backend-deployment backend=pixiz/apartment-backend:sha-<commit-hash>
+
+     kubectl set image deployment/apartment-frontend-deployment frontend=pixiz/apartment-frontend:sha-<commit-hash>
+     ```
+     *(ตัวอย่าง: `kubectl set image deployment/apartment-backend-deployment backend=pixiz/apartment-backend:sha-5b24fc1a`)*
+
+   - **วิธีที่ 2: แก้ไขในไฟล์ `k8s/deployment.yaml` โดยตรง**
+     1. เปิดไฟล์ `k8s/deployment.yaml` แล้วแก้ไขระบุ Image ที่ต้องการในส่วนของ Containers:
+        ```yaml
+        containers:
+        - name: backend
+          image: pixiz/apartment-backend:<tag-ที่ต้องการ>   # เช่น sha-05622c4 หรือ latest
+          imagePullPolicy: Always
+        ```
+     2. สั่ง Apply การเปลี่ยนแปลงไปยังคลัสเตอร์:
+        ```bash
+        kubectl apply -f k8s/deployment.yaml
+        ```
+6. **คำสั่ง Cleanup เมื่อตรวจเสร็จ:**
    ```bash
    kubectl delete -f k8s/deployment.yaml
    kubectl delete -f k8s/configmap.yaml
