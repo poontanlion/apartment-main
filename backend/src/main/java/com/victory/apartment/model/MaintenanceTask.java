@@ -35,6 +35,7 @@ public class MaintenanceTask {
     private String recurringReminder; // None, Monthly, Quarterly, Every 6 Months, Yearly
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
+    private Boolean archived; // true = archived to per-unit maintenance logs (hidden from main list)
 
     public MaintenanceTask() {}
 
@@ -82,5 +83,7 @@ public class MaintenanceTask {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getCompletedAt() { return completedAt; }
     public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
+    public Boolean getArchived() { return archived; }
+    public void setArchived(Boolean archived) { this.archived = archived; }
 }
 
