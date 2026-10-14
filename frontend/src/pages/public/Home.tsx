@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Building2, Search, SlidersHorizontal, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { RoomCard } from '../../components/common/RoomCard';
-import { Room } from '../../types';
-import { getRooms } from '../../services/api';
+import { Building, Room } from '../../types';
+import { getBuildings, getRooms } from '../../services/api';
 import { useLanguage } from '../../context/LanguageContext';
 
 export const Home: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [buildings, setBuildings] = useState<Building[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filter States
@@ -22,8 +23,12 @@ export const Home: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const roomData = await getRooms();
+        const [roomData, buildingData] = await Promise.all([
+          getRooms(),
+          getBuildings().catch(() => [] as Building[]),
+        ]);
         setRooms(roomData);
+        setBuildings(buildingData);
       } catch (err) {
         console.error('Failed to load rooms:', err);
       } finally {
@@ -42,6 +47,13 @@ export const Home: React.FC = () => {
     setPriceFilter('all');
   };
 
+  const buildingOptions: Building[] = buildings.length > 0 ? buildings : [
+    { id: 'bld-1', name: language === 'th' ? 'อาคาร A' : 'Building A', code: 'A', floors: 0, totalRooms: 0 },
+    { id: 'bld-2', name: language === 'th' ? 'อาคาร B' : 'Building B', code: 'B', floors: 0, totalRooms: 0 },
+  ];
+
+  const floorOptions = Array.from(new Set(rooms.map(room => room.floor))).sort((a, b) => a - b);
+
   const filteredRooms = rooms.filter(room => {
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase();
@@ -52,9 +64,13 @@ export const Home: React.FC = () => {
     }
 
     if (buildingFilter !== 'all') {
-      const isBld2 = room.buildingId === 'bld-2' || room.roomNumber.startsWith('B');
-      if (buildingFilter === 'bld-2' && !isBld2) return false;
-      if (buildingFilter === 'bld-1' && isBld2) return false;
+      if (room.buildingId) {
+        if (room.buildingId !== buildingFilter) return false;
+      } else {
+        const selectedBuilding = buildingOptions.find(building => building.id === buildingFilter);
+        const buildingCode = (selectedBuilding?.code || '').trim().toUpperCase();
+        if (!buildingCode || !room.roomNumber.toUpperCase().startsWith(buildingCode)) return false;
+      }
     }
 
     if (floorFilter !== 'all' && room.floor.toString() !== floorFilter) return false;
@@ -130,7 +146,7 @@ export const Home: React.FC = () => {
               </div>
               <div>
                 <h3 className="font-bold text-lg text-nike-ink dark:text-white">{t('filter.title')}</h3>
-                <p className="text-xs text-nike-mute dark:text-nike-stone">Apartment System · 2 Floors · 24 Units</p>
+                <p className="text-xs text-nike-mute dark:text-nike-stone">Apartment System · {buildingOptions.length} Buildings · {rooms.length} Units</p>
               </div>
             </div>
 
@@ -171,8 +187,9 @@ export const Home: React.FC = () => {
                 className="w-full px-4 py-2.5 text-xs font-bold bg-nike-soft-cloud dark:bg-nike-dark-card border border-nike-hairline dark:border-nike-dark-card text-blue-600 dark:text-blue-400 rounded-full focus:outline-none focus:ring-2 focus:ring-nike-ink dark:focus:ring-white transition-all cursor-pointer"
               >
                 <option value="all">{t('filter.allBuildings')}</option>
-                <option value="bld-1">{t('filter.buildingA')}</option>
-                <option value="bld-2">{t('filter.buildingB')}</option>
+                {buildingOptions.map(building => (
+                  <option key={building.id} value={building.id}>{building.name}</option>
+                ))}
               </select>
             </div>
 
@@ -185,8 +202,9 @@ export const Home: React.FC = () => {
                 className="w-full px-4 py-2.5 text-xs font-semibold bg-nike-soft-cloud dark:bg-nike-dark-card border border-nike-hairline dark:border-nike-dark-card rounded-full text-nike-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-nike-ink dark:focus:ring-white transition-all"
               >
                 <option value="all">{t('filter.allFloors')}</option>
-                <option value="1">{t('filter.floor1')}</option>
-                <option value="2">{t('filter.floor2')}</option>
+                {floorOptions.map(floor => (
+                  <option key={floor} value={floor.toString()}>{language === 'th' ? `ชั้น ${floor}` : `Floor ${floor}`}</option>
+                ))}
               </select>
             </div>
 
