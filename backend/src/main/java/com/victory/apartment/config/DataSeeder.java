@@ -8,8 +8,10 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.context.annotation.Profile;
 
 @Component
+@Profile("!prod")
 public class DataSeeder {
 
     private final BuildingRepository buildingRepo;
