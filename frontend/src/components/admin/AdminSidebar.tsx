@@ -3,11 +3,12 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileSignature, FileText, Wrench,
   BedDouble, History, Bell, ArrowLeft, Building2, CalendarCheck,
-  Sun, Moon, Menu, X, Globe
+  Sun, Moon, Menu, X, Globe, KeyRound
 } from 'lucide-react';
 import { getNotifications, getBookings } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 export const AdminSidebar: React.FC = () => {
   const location = useLocation();
@@ -16,6 +17,7 @@ export const AdminSidebar: React.FC = () => {
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [pendingBookingCount, setPendingBookingCount] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchCounts = async () => {
@@ -171,6 +173,21 @@ export const AdminSidebar: React.FC = () => {
             })}
 
             <div className="pt-4 border-t border-neutral-800 space-y-2">
+              <button
+                onClick={() => {
+                  setMobileOpen(false);
+                  setPasswordModalOpen(true);
+                }}
+                className="flex items-center justify-between w-full bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold uppercase tracking-wider px-4 py-3 rounded-full transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-amber-400" />
+                  <span>{t('admin.nav.changePassword')}</span>
+                </div>
+                <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  ROTATION
+                </span>
+              </button>
               <Link
                 to="/rooms"
                 onClick={() => setMobileOpen(false)}
@@ -265,6 +282,19 @@ export const AdminSidebar: React.FC = () => {
               </span>
             </button>
 
+            <button
+              onClick={() => setPasswordModalOpen(true)}
+              className="flex items-center justify-between w-full bg-neutral-800/80 hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider px-4 py-2.5 rounded-full transition-colors active:scale-95"
+            >
+              <span className="flex items-center gap-2">
+                <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                <span>{t('admin.nav.changePassword')}</span>
+              </span>
+              <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                ROTATION
+              </span>
+            </button>
+
             <Link
               to="/rooms"
               className="flex items-center justify-center gap-2 w-full bg-neutral-800/80 hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider py-2.5 rounded-full transition-colors"
@@ -275,6 +305,12 @@ export const AdminSidebar: React.FC = () => {
 
         </div>
       </aside>
+
+      {/* PASSWORD ROTATION MODAL */}
+      <ChangePasswordModal
+        isOpen={passwordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+      />
     </>
   );
 };

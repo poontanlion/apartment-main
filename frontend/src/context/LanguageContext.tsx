@@ -181,8 +181,18 @@ const translations: Record<string, Record<Language, string>> = {
   'admin.nav.bookings': { th: 'คำขอจองห้องพัก', en: 'Booking Requests' },
   'admin.nav.activityLog': { th: 'ประวัติกิจกรรมระบบ', en: 'Activity Log' },
   'admin.nav.notifications': { th: 'การแจ้งเตือน', en: 'Notifications' },
+  'admin.nav.changePassword': { th: 'เปลี่ยนรหัสผ่าน Admin', en: 'Password Rotation' },
   'admin.nav.backToPublic': { th: 'กลับสู่หน้าเว็บไซต์', en: 'Back to Public Site' },
   'admin.nav.controlPanel': { th: 'แผงควบคุมระบบ', en: 'Control Panel' },
+  'admin.pwd.modalTitle': { th: 'เปลี่ยนรหัสผ่าน Admin (Password Rotation)', en: 'Rotate Admin Password' },
+  'admin.pwd.modalDesc': { th: 'อัปเดตรหัสผ่านใหม่ตามนโยบายความปลอดภัยของระบบ', en: 'Update admin password following security compliance policies.' },
+  'admin.pwd.currentPass': { th: 'รหัสผ่านปัจจุบัน', en: 'Current Password' },
+  'admin.pwd.newPass': { th: 'รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)', en: 'New Password (min 6 characters)' },
+  'admin.pwd.confirmPass': { th: 'ยืนยันรหัสผ่านใหม่', en: 'Confirm New Password' },
+  'admin.pwd.lastChanged': { th: 'เปลี่ยนรหัสผ่านล่าสุดเมื่อ:', en: 'Last rotated:' },
+  'admin.pwd.never': { th: 'ค่าเริ่มต้นจากระบบ', en: 'System default' },
+  'admin.pwd.submit': { th: 'ยืนยันเปลี่ยนรหัสผ่าน', en: 'Confirm Rotation' },
+  'admin.pwd.cancel': { th: 'ยกเลิก', en: 'Cancel' },
 
   // Admin Dashboard
   'dashboard.title': { th: 'แดชบอร์ดระบบบริหารจัดการอพาร์ตเมนต์', en: 'Apartment Operations Command Center' },

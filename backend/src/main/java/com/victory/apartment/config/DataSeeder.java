@@ -3,16 +3,24 @@ package com.victory.apartment.config;
 import com.victory.apartment.model.*;
 import com.victory.apartment.repository.*;
 import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import org.springframework.context.annotation.Profile;
 
 @Component
-@Profile("!prod")
 public class DataSeeder {
+
+    @Value("${app.admin.email:${ADMIN_EMAIL:admin@victoryapartment.com}}")
+    private String adminEmail;
+
+    @Value("${app.admin.password:${ADMIN_PASSWORD:admin}}")
+    private String adminPassword;
+
+    @Value("${app.admin.username:${ADMIN_USERNAME:admin}}")
+    private String adminUsername;
 
     private final BuildingRepository buildingRepo;
     private final RoomRepository roomRepo;
@@ -198,11 +206,13 @@ public class DataSeeder {
     }
 
     private void seedUsers() {
-        if (!userRepo.existsByEmail("admin@victoryapartment.com")) {
-            userRepo.save(new AppUser("usr-admin-01", "admin@victoryapartment.com", "admin", "Victory Admin", "081-234-5678", "admin"));
+        if (!userRepo.existsByEmail(adminEmail)) {
+            AppUser admin = new AppUser("usr-admin-01", adminEmail, adminPassword, "Victory Admin", "081-234-5678", "admin");
+            userRepo.save(admin);
         }
-        if (!userRepo.existsByEmail("admin")) {
-            userRepo.save(new AppUser("usr-admin-02", "admin", "admin", "Victory Admin", "081-234-5678", "admin"));
+        if (!adminEmail.equalsIgnoreCase(adminUsername) && !userRepo.existsByEmail(adminUsername)) {
+            AppUser adminAlias = new AppUser("usr-admin-02", adminUsername, adminPassword, "Victory Admin", "081-234-5678", "admin");
+            userRepo.save(adminAlias);
         }
     }
 

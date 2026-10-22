@@ -20,6 +20,7 @@ public class AppUser {
     private String phone;
     private String role; // "admin" or "customer"
     private LocalDateTime createdAt;
+    private LocalDateTime lastPasswordChange;
 
     public AppUser() {}
 
@@ -31,6 +32,7 @@ public class AppUser {
         this.phone = phone;
         this.role = role;
         this.createdAt = LocalDateTime.now();
+        this.lastPasswordChange = LocalDateTime.now();
     }
 
     public String getId() { return id; }
@@ -53,5 +55,8 @@ public class AppUser {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getLastPasswordChange() { return lastPasswordChange; }
+    public void setLastPasswordChange(LocalDateTime lastPasswordChange) { this.lastPasswordChange = lastPasswordChange; }
 }
 

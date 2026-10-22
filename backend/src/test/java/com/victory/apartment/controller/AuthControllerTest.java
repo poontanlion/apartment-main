@@ -225,4 +225,62 @@ public class AuthControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }
+
+    /**
+     * SUCCESS Case: Admin password rotation / change password.
+     * Endpoint: POST /api/auth/change-password
+     */
+    @Test
+    void changePassword_AdminSuccess() throws Exception {
+        Map<String, String> data = new HashMap<>();
+        data.put("email", "admin@victoryapartment.com");
+        data.put("oldPassword", "admin");
+        data.put("newPassword", "NewAdminSecret2026!");
+
+        Mockito.when(userRepo.save(any(AppUser.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        mockMvc.perform(post("/api/auth/change-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(data)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Admin password rotated successfully."));
+    }
+
+    /**
+     * FAILURE Case: Change password with incorrect current password.
+     * Endpoint: POST /api/auth/change-password
+     */
+    @Test
+    void changePassword_WrongCurrentPassword() throws Exception {
+        Map<String, String> data = new HashMap<>();
+        data.put("email", "admin@victoryapartment.com");
+        data.put("oldPassword", "wrongOldPass");
+        data.put("newPassword", "NewAdminSecret2026!");
+
+        mockMvc.perform(post("/api/auth/change-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(data)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("Current password is incorrect."));
+    }
+
+    /**
+     * FAILURE Case: Change password with short new password (< 6 chars).
+     * Endpoint: POST /api/auth/change-password
+     */
+    @Test
+    void changePassword_ShortNewPassword() throws Exception {
+        Map<String, String> data = new HashMap<>();
+        data.put("email", "admin@victoryapartment.com");
+        data.put("oldPassword", "admin");
+        data.put("newPassword", "123");
+
+        mockMvc.perform(post("/api/auth/change-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(data)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
 }

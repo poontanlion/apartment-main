@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
-import { loginAdmin, registerApiUser, updateUserProfile, logoutApiUser } from '../services/api';
+import { loginAdmin, registerApiUser, updateUserProfile, logoutApiUser, changePasswordApi } from '../services/api';
 import { toast } from 'sonner';
 
 interface AuthContextType {
@@ -10,6 +10,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; role?: string }>;
   register: (fullname: string, email: string, password: string, phone?: string) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (fullname: string, phone?: string) => Promise<{ success: boolean; error?: string }>;
+  changePassword: (oldPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -44,6 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: result.user.email,
         phone: result.user.phone,
         role: result.user.role || 'customer',
+        lastPasswordChange: result.user.lastPasswordChange,
       };
       setUser(authUser);
       toast.success(`Welcome back, ${authUser.fullname}`);
@@ -65,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: result.user.email,
         phone,
         role: 'customer',
+        lastPasswordChange: result.user.lastPasswordChange,
       };
       setUser(authUser);
       toast.success(`Account created! Welcome to Victory Apartment, ${fullname}`);
@@ -94,6 +97,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: false, error: err };
   };
 
+  const changePassword = async (oldPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    if (!user) return { success: false, error: 'No authenticated user' };
+    const res = await changePasswordApi(user.email, oldPassword, newPassword);
+    if (res.success) {
+      if (res.lastPasswordChange) {
+        const updated: User = { ...user, lastPasswordChange: res.lastPasswordChange };
+        setUser(updated);
+        localStorage.setItem('apt_auth_user', JSON.stringify(updated));
+      }
+      toast.success(res.message || 'Password changed successfully');
+      return { success: true };
+    }
+    const err = res.error || 'Failed to change password.';
+    toast.error(err);
+    return { success: false, error: err };
+  };
+
   const logout = () => {
     void logoutApiUser().catch(err => console.error('Failed to end server session:', err));
     setUser(null);
@@ -108,6 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       register,
       updateProfile,
+      changePassword,
       logout,
     }}>
       {children}

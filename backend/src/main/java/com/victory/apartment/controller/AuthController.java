@@ -3,9 +3,11 @@ package com.victory.apartment.controller;
 import com.victory.apartment.model.AppUser;
 import com.victory.apartment.repository.AppUserRepository;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -16,6 +18,15 @@ import java.util.UUID;
 public class AuthController {
 
     private final AppUserRepository userRepo;
+
+    @Value("${app.admin.username:${ADMIN_USERNAME:admin}}")
+    private String adminUsername = "admin";
+
+    @Value("${app.admin.email:${ADMIN_EMAIL:admin@victoryapartment.com}}")
+    private String adminEmail = "admin@victoryapartment.com";
+
+    @Value("${app.admin.password:${ADMIN_PASSWORD:admin}}")
+    private String adminPassword = "admin";
 
     public AuthController(AppUserRepository userRepo) {
         this.userRepo = userRepo;
@@ -28,17 +39,30 @@ public class AuthController {
 
         Map<String, Object> response = new HashMap<>();
 
-        // Admin authentication
-        if ((email.equals("admin") || email.equals("admin@victoryapartment.com")) && password.equals("admin")) {
-            Map<String, Object> userMap = new HashMap<>();
-            userMap.put("id", "usr-admin-01");
-            userMap.put("fullname", "Victory Admin");
-            userMap.put("email", "admin@victoryapartment.com");
-            userMap.put("role", "admin");
-            response.put("success", true);
-            response.put("user", userMap);
-            establishSession(request, "admin@victoryapartment.com");
-            return ResponseEntity.ok(response);
+        // Admin authentication (Environment Variables / Database backed, no hardcoding)
+        boolean matchesAdminIdentity = email.equalsIgnoreCase(adminUsername) || email.equalsIgnoreCase(adminEmail);
+        if (matchesAdminIdentity) {
+            Optional<AppUser> adminDbOpt = userRepo.findByEmail(adminEmail);
+            if (adminDbOpt.isEmpty()) {
+                adminDbOpt = userRepo.findByEmail(adminUsername);
+            }
+
+            String effectiveAdminPassword = adminDbOpt.map(AppUser::getPassword).orElse(adminPassword);
+            if (password.equals(effectiveAdminPassword)) {
+                AppUser adminUser = adminDbOpt.orElse(null);
+                Map<String, Object> userMap = new HashMap<>();
+                userMap.put("id", adminUser != null ? adminUser.getId() : "usr-admin-01");
+                userMap.put("fullname", adminUser != null ? adminUser.getFullname() : "Victory Admin");
+                userMap.put("email", adminEmail);
+                userMap.put("role", "admin");
+                if (adminUser != null && adminUser.getLastPasswordChange() != null) {
+                    userMap.put("lastPasswordChange", adminUser.getLastPasswordChange().toString());
+                }
+                response.put("success", true);
+                response.put("user", userMap);
+                establishSession(request, adminEmail);
+                return ResponseEntity.ok(response);
+            }
         }
 
         // Database user authentication (by email)
@@ -50,6 +74,9 @@ public class AuthController {
             userMap.put("fullname", dbUser.getFullname());
             userMap.put("email", dbUser.getEmail());
             userMap.put("role", dbUser.getRole());
+            if (dbUser.getLastPasswordChange() != null) {
+                userMap.put("lastPasswordChange", dbUser.getLastPasswordChange().toString());
+            }
             response.put("success", true);
             response.put("user", userMap);
             establishSession(request, dbUser.getEmail());
@@ -154,6 +181,78 @@ public class AuthController {
 
         response.put("success", true);
         response.put("user", userMap);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<Map<String, Object>> changePassword(@RequestBody Map<String, String> payload) {
+        String email = payload.getOrDefault("email", "").trim().toLowerCase();
+        String oldPassword = payload.getOrDefault("oldPassword", "").trim();
+        String newPassword = payload.getOrDefault("newPassword", "").trim();
+
+        Map<String, Object> response = new HashMap<>();
+
+        if (email.isEmpty() || oldPassword.isEmpty() || newPassword.isEmpty()) {
+            response.put("success", false);
+            response.put("error", "Email, old password, and new password are required.");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        if (newPassword.length() < 6) {
+            response.put("success", false);
+            response.put("error", "New password must be at least 6 characters.");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        boolean isAdmin = email.equalsIgnoreCase(adminUsername) || email.equalsIgnoreCase(adminEmail);
+
+        if (isAdmin) {
+            Optional<AppUser> adminOpt = userRepo.findByEmail(adminEmail);
+            if (adminOpt.isEmpty()) {
+                adminOpt = userRepo.findByEmail(adminUsername);
+            }
+
+            String currentPass = adminOpt.map(AppUser::getPassword).orElse(adminPassword);
+            if (!currentPass.equals(oldPassword)) {
+                response.put("success", false);
+                response.put("error", "Current password is incorrect.");
+                return ResponseEntity.status(401).body(response);
+            }
+
+            AppUser admin = adminOpt.orElseGet(() -> new AppUser("usr-admin-01", adminEmail, newPassword, "Victory Admin", "081-234-5678", "admin"));
+            admin.setPassword(newPassword);
+            admin.setLastPasswordChange(LocalDateTime.now());
+            AppUser saved = userRepo.save(admin);
+
+            // Synchronize alias if present
+            userRepo.findByEmail(adminUsername).ifPresent(alias -> {
+                alias.setPassword(newPassword);
+                alias.setLastPasswordChange(LocalDateTime.now());
+                userRepo.save(alias);
+            });
+
+            response.put("success", true);
+            response.put("message", "Admin password rotated successfully.");
+            response.put("lastPasswordChange", saved.getLastPasswordChange().toString());
+            return ResponseEntity.ok(response);
+        }
+
+        // Standard user change password
+        Optional<AppUser> userOpt = userRepo.findByEmail(email);
+        if (userOpt.isEmpty() || !userOpt.get().getPassword().equals(oldPassword)) {
+            response.put("success", false);
+            response.put("error", "Current password is incorrect.");
+            return ResponseEntity.status(401).body(response);
+        }
+
+        AppUser user = userOpt.get();
+        user.setPassword(newPassword);
+        user.setLastPasswordChange(LocalDateTime.now());
+        AppUser saved = userRepo.save(user);
+
+        response.put("success", true);
+        response.put("message", "Password rotated successfully.");
+        response.put("lastPasswordChange", saved.getLastPasswordChange().toString());
         return ResponseEntity.ok(response);
     }
 }

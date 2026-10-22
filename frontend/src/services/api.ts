@@ -491,3 +491,18 @@ export const updateUserProfile = async (fullname: string, email: string, phone?:
     return { success: false, error: err.message || 'Failed to update profile' };
   }
 };
+
+export const changePasswordApi = async (
+  email: string,
+  oldPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; message?: string; lastPasswordChange?: string; error?: string }> => {
+  try {
+    return await fetchJson(`${API_BASE}/auth/change-password`, {
+      method: 'POST',
+      body: JSON.stringify({ email, oldPassword, newPassword }),
+    });
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to change password' };
+  }
+};
