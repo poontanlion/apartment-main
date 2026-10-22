@@ -26,7 +26,7 @@ jobs:
           cache: maven
       - name: Run Unit Tests
         working-directory: ./backend
-        run: ./mvnw test -Dtest="*ControllerTest"
+        run: ./mvnw test -Dtest="*ControllerTest,ActuatorHealthTest"
 
       - name: Publish Unit Test Report
         if: always()
@@ -42,6 +42,6 @@ jobs:
           {
             echo "## Backend Unit Tests Report"
             echo "- Status: ${{ job.status }}"
-            echo "- Test scope: *ControllerTest"
+            echo "- Test scope: *ControllerTest, ActuatorHealthTest"
             echo "- JUnit XML: backend/target/surefire-reports/*.xml"
           } >> "$GITHUB_STEP_SUMMARY"

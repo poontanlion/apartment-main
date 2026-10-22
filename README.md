@@ -91,7 +91,8 @@
 - `TenantControllerTest` (7 tests): การจัดการข้อมูลผู้เช่าและตัวกรองตามอาคาร
 - `UtilityBillControllerTest` (7 tests): การคำนวณและจัดการบิลค่าน้ำ ค่าไฟ ค่าเช่า
 - `MaintenanceControllerTest` (14 tests): การติดตามงานซ่อม, การเบิกอุปกรณ์, บันทึกประวัติ และการแจ้งเตือนรอบบำรุงรักษา
-- `GeneralControllerTest` (8 tests): Health check และข้อมูลทั่วไปของระบบ
+- `GeneralControllerTest` (8 tests): ข้อมูลบันทึกกิจกรรม (Activity Logs) และการแจ้งเตือน (Notifications)
+- `ActuatorHealthTest` (3 tests): Health check & Probes ของระบบด้วย Spring Boot Actuator (Database status, Liveness, Readiness)
 - `LeaseControllerTest` (6 tests): การออกสัญญาเช่า และ**การตรวจจับการเช่าห้องซ้ำซ้อน (Conflict Prevention)**
 
 *(ดูรายละเอียดเชิงลึกของแต่ละ Test Case เพิ่มเติมได้ที่ไฟล์ `test_documentation.md`)*

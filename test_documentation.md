@@ -32,8 +32,9 @@ Unit Test ของ Spring Boot ในโปรเจกต์นี้ใช้
 | `MaintenanceController` | `MaintenanceControllerTest` | 14 |
 | `GeneralController` | `GeneralControllerTest` | 8 |
 | `LeaseController` | `LeaseControllerTest` | 6 |
+| `Actuator (Health)` | `ActuatorHealthTest` | 3 |
 
-**รวมทั้งหมด: 69 Test Methods ครอบคลุม 9 Controllers**
+**รวมทั้งหมด: 72 Test Methods ครอบคลุม Controllers และ Health Check**
 
 ---
 
@@ -45,6 +46,7 @@ Unit Test ของ Spring Boot ในโปรเจกต์นี้ใช้
 - **UtilityBillControllerTest**: ครอบคลุม CRUD, อัปเดต Status และ Filter `?buildingId=`
 - **MaintenanceControllerTest**: ครอบคลุม Tasks, Supplies, Logs, Reminders รวม 14 เคส
 - **LeaseControllerTest**: ทดสอบการจองสัญญา, เช็ค Conflict และยกเลิกสัญญา (Terminate)
+- **ActuatorHealthTest**: ตรวจสอบสถานะความพร้อมของระบบ (Liveness, Readiness Probes) และสถานะการเชื่อมต่อ Database ผ่าน Spring Boot Actuator
 
 ---
 

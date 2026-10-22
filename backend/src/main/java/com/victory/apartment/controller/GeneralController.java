@@ -31,12 +31,6 @@ public class GeneralController {
         this.notifRepo = notifRepo;
     }
 
-    // === HEALTH CHECK (used by Kubernetes Liveness/Readiness Probe) ===
-    @GetMapping("/general/health")
-    public ResponseEntity<java.util.Map<String, String>> health() {
-        return ResponseEntity.ok(java.util.Map.of("status", "UP"));
-    }
-
     // === ACTIVITY LOGS ===
     @GetMapping("/activity-logs")
     public List<ActivityLog> getActivityLogs() {
@@ -84,4 +78,3 @@ public class GeneralController {
         return ResponseEntity.notFound().build();
     }
 }
-
