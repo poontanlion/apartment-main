@@ -96,10 +96,10 @@ public class MaintenanceController {
         AppNotification notif = new AppNotification();
         notif.setId("notif-" + UUID.randomUUID().toString().substring(0, 8));
         notif.setTitle(String.format("New Repair Request: Unit %s (%s)", saved.getRoomNumber() != null ? saved.getRoomNumber() : "", saved.getCategory() != null ? saved.getCategory() : "General"));
-        notif.setMessage(String.format("Unit %s reported by %s: %s (Priority: %s)", 
-            saved.getRoomNumber(), 
-            saved.getReporterName() != null && !saved.getReporterName().isEmpty() ? saved.getReporterName() : "Resident", 
-            saved.getDescription(), 
+        // Free-text descriptions can contain contact details; do not copy them into persistent notifications.
+        notif.setMessage(String.format("Unit %s has a new %s maintenance request (Priority: %s)",
+            saved.getRoomNumber(),
+            saved.getCategory() != null && !saved.getCategory().isEmpty() ? saved.getCategory() : "general",
             saved.getPriority()));
         notif.setType("warning");
         notif.setIsRead(false);

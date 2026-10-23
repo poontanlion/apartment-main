@@ -41,7 +41,7 @@ public class TenantController {
             tenant.setId("t-" + UUID.randomUUID().toString().substring(0, 8));
         }
         if (tenant.getCreatedAt() == null) tenant.setCreatedAt(LocalDateTime.now());
-        logService.log("Tenant Created", "Created tenant profile for " + tenant.getFullname());
+        logService.log("Tenant Created", "Created tenant profile");
         return repo.save(tenant);
     }
 
@@ -49,14 +49,20 @@ public class TenantController {
     public ResponseEntity<Tenant> update(@PathVariable String id, @RequestBody Tenant incoming) {
         return repo.findById(id).map(existing -> {
             if (incoming.getFullname() != null) existing.setFullname(incoming.getFullname());
-            if (incoming.getPhone() != null) existing.setPhone(incoming.getPhone());
-            if (incoming.getEmail() != null) existing.setEmail(incoming.getEmail());
-            if (incoming.getIdCardPassport() != null) existing.setIdCardPassport(incoming.getIdCardPassport());
-            if (incoming.getEmergencyContact() != null) existing.setEmergencyContact(incoming.getEmergencyContact());
+            // Preserve stored values if the client submits the masked response unchanged.
+            if (incoming.getPhone() != null && !incoming.getPhone().matches(".*x{3,}.*")) existing.setPhone(incoming.getPhone());
+            if (incoming.getEmail() != null && !incoming.getEmail().contains("***")) existing.setEmail(incoming.getEmail());
+            // The API returns masked values; keep the stored originals when the client submits them unchanged.
+            if (incoming.getIdCardPassport() != null && !incoming.getIdCardPassport().contains("*")) {
+                existing.setIdCardPassport(incoming.getIdCardPassport());
+            }
+            if (incoming.getEmergencyContact() != null && !incoming.getEmergencyContact().matches(".*x{3,}.*")) {
+                existing.setEmergencyContact(incoming.getEmergencyContact());
+            }
             if (incoming.getUnitId() != null) existing.setUnitId(incoming.getUnitId());
             if (incoming.getUnitNumber() != null) existing.setUnitNumber(incoming.getUnitNumber());
 
-            logService.log("Tenant Updated", "Updated tenant profile for " + existing.getFullname());
+            logService.log("Tenant Updated", "Updated tenant profile");
             return ResponseEntity.ok(repo.save(existing));
         }).orElse(ResponseEntity.notFound().build());
     }

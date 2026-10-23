@@ -2,6 +2,7 @@ package com.victory.apartment.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.victory.apartment.model.Booking;
+import com.victory.apartment.model.AppNotification;
 import com.victory.apartment.model.Room;
 import com.victory.apartment.repository.AppNotificationRepository;
 import com.victory.apartment.repository.BookingRepository;
@@ -23,6 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
+import org.mockito.ArgumentCaptor;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -63,6 +65,7 @@ public class BookingControllerTest {
         mockBooking.setId("bk-123");
         mockBooking.setRoomId("rm-123");
         mockBooking.setGuestName("John Doe");
+        mockBooking.setGuestPhone("0812345678");
         mockBooking.setStatus("Pending");
         mockBooking.setCheckIn("2026-09-20");
         mockBooking.setCheckOut("2027-09-20");
@@ -100,6 +103,10 @@ public class BookingControllerTest {
                 .content(objectMapper.writeValueAsString(mockBooking)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("bk-123"));
+
+        ArgumentCaptor<AppNotification> notification = ArgumentCaptor.forClass(AppNotification.class);
+        Mockito.verify(notifRepo).save(notification.capture());
+        org.junit.jupiter.api.Assertions.assertFalse(notification.getValue().getMessage().contains("0812345678"));
     }
 
     /**

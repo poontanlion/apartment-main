@@ -1,5 +1,10 @@
 package com.victory.apartment.model;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.victory.apartment.serialization.MaskedEmergencyContactSerializer;
+import com.victory.apartment.serialization.MaskedIdSerializer;
+import com.victory.apartment.serialization.MaskedEmailSerializer;
+import com.victory.apartment.serialization.MaskedPhoneSerializer;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -13,9 +18,13 @@ public class Tenant {
     @Column(nullable = false)
     private String fullname;
 
+    @JsonSerialize(using = MaskedPhoneSerializer.class)
     private String phone;
+    @JsonSerialize(using = MaskedEmailSerializer.class)
     private String email;
+    @JsonSerialize(using = MaskedIdSerializer.class)
     private String idCardPassport;
+    @JsonSerialize(using = MaskedEmergencyContactSerializer.class)
     private String emergencyContact;
     private String unitId;
     private String unitNumber;

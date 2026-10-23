@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FileSignature, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Booking, BookingLeaseApplication } from '../../types';
+import { useAuth } from '../../context/AuthContext';
 import { createBookingLease } from '../../services/api';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatCurrency, formatDate } from '../../utils/formatters';
@@ -17,14 +18,15 @@ interface Props {
 
 export const BookingLeaseForm: React.FC<Props> = ({ booking, rentAmount, onSaved, onCancel }) => {
   const { language } = useLanguage();
+  const { user } = useAuth();
   const isThai = language === 'th';
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<LeaseFieldErrors>({});
   const [form, setForm] = useState<BookingLeaseApplication>({
     fullname: booking.guestName || '',
-    phone: booking.guestPhone || '',
-    email: booking.guestEmail || '',
+    phone: booking.guestPhone?.includes('x') ? (user?.phone || '') : (booking.guestPhone || ''),
+    email: booking.guestEmail?.includes('***') ? (user?.email || '') : (booking.guestEmail || ''),
     idCardPassport: '',
     emergencyContact: '',
   });
@@ -104,7 +106,7 @@ export const BookingLeaseForm: React.FC<Props> = ({ booking, rentAmount, onSaved
           <span className="block font-medium">{isThai ? 'อีเมล' : 'Email Address'}</span>
           <input type="email" name="email" autoComplete="email" readOnly value={form.email} {...fieldProps('email')} className={`${inputClass} opacity-75`} />
           {fieldError('email')}
-          <span className="block text-xs text-nike-mute dark:text-nike-stone">{isThai ? 'ใช้อีเมลเดียวกับการจองของคุณ' : 'Uses the email address associated with your booking.'}</span>
+          <span className="block text-xs text-nike-mute dark:text-nike-stone">{isThai ? 'ใช้อีเมลบัญชีที่ใช้ในการจองของคุณ' : 'Uses your account email associated with this booking.'}</span>
         </label>
         <label className="space-y-1.5 text-nike-ink dark:text-white">
           <span className="block font-medium">{isThai ? 'เลขบัตรประชาชน / หนังสือเดินทาง' : 'ID Card / Passport No.'}</span>

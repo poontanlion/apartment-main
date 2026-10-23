@@ -1,5 +1,8 @@
 package com.victory.apartment.model;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.victory.apartment.serialization.MaskedEmailSerializer;
+import com.victory.apartment.serialization.MaskedPhoneSerializer;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -23,7 +26,9 @@ public class MaintenanceTask {
     private String dueDate;
     private String preferredTime;
     private String reporterName;
+    @JsonSerialize(using = MaskedPhoneSerializer.class)
     private String reporterPhone;
+    @JsonSerialize(using = MaskedEmailSerializer.class)
     private String reporterEmail;
     private String priority; // Low, Medium, High
     private String status; // Pending, In Progress, Completed

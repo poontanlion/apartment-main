@@ -52,6 +52,8 @@ public class TenantControllerTest {
         mockTenant.setId("t-123");
         mockTenant.setFullname("John Doe");
         mockTenant.setUnitId("rm-1");
+        mockTenant.setIdCardPassport("P123456789");
+        mockTenant.setEmergencyContact("Family 081-234-5678");
     }
 
     /**
@@ -66,7 +68,9 @@ public class TenantControllerTest {
         mockMvc.perform(get("/api/tenants"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value("t-123"))
-                .andExpect(jsonPath("$[0].fullname").value("John Doe"));
+                .andExpect(jsonPath("$[0].fullname").value("John Doe"))
+                .andExpect(jsonPath("$[0].idCardPassport").value("******6789"))
+                .andExpect(jsonPath("$[0].emergencyContact").value("Family xxxxxx5678"));
     }
 
     /**

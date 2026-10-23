@@ -1,5 +1,9 @@
 package com.victory.apartment.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.victory.apartment.serialization.MaskedEmailSerializer;
+import com.victory.apartment.serialization.MaskedPhoneSerializer;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -11,12 +15,15 @@ public class AppUser {
     private String id;
 
     @Column(nullable = false, unique = true)
+    @JsonSerialize(using = MaskedEmailSerializer.class)
     private String email;
 
+    @JsonIgnore
     @Column(nullable = false)
     private String password;
 
     private String fullname;
+    @JsonSerialize(using = MaskedPhoneSerializer.class)
     private String phone;
     private String role; // "admin" or "customer"
     private LocalDateTime createdAt;

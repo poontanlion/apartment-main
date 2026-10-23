@@ -68,8 +68,8 @@ test('admin approval unlocks resident lease form and connects it to Tenants @mob
     await admin.goto(`${test.info().project.use.baseURL}/admin/tenants`);
     await admin.getByPlaceholder('Search name, phone or unit...').fill(leaseName);
     await expect(admin.getByRole('heading', { name: leaseName, exact: true })).toBeVisible();
-    await expect(admin.getByText('ID / Passport: P123456789', { exact: true })).toBeVisible();
-    await expect(admin.getByText('Emergency Contact: Family 0811111111', { exact: true })).toBeVisible();
+    await expect(admin.getByText('ID / Passport: ******6789', { exact: true })).toBeVisible();
+    await expect(admin.getByText('Emergency Contact: Family xxxxxx1111', { exact: true })).toBeVisible();
     await expect(admin.getByRole('row').filter({ hasText: leaseName }).filter({ hasText: room.roomNumber })).toHaveCount(1);
   } finally {
     await adminContext.close();

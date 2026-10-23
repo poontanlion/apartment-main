@@ -212,7 +212,7 @@ export const CheckBookingPage: React.FC = () => {
         <div className="space-y-6">
           {bookings.map((booking) => {
             const matchedRoom = getRoomForBooking(booking);
-            const isOwnBooking = isAuthenticated && user?.email?.toLowerCase() === booking.guestEmail?.toLowerCase();
+            const isOwnBooking = isAuthenticated && Boolean(user?.email) && query.trim().toLowerCase() === user!.email.toLowerCase();
             return (
               <div
                 key={booking.id}

@@ -159,14 +159,15 @@ public class BookingController {
         AppNotification notif = new AppNotification();
         notif.setId("notif-" + UUID.randomUUID().toString().substring(0, 8));
         notif.setTitle("New Rental Application (Unit " + (saved.getRoomNumber() != null ? saved.getRoomNumber() : "") + ")");
-        notif.setMessage(String.format("New application from %s for Unit %s (Phone: %s, Move-in: %s)",
-                saved.getGuestName(), saved.getRoomNumber(), saved.getGuestPhone(), saved.getCheckIn()));
+        // Keep contact details out of persistent notifications; authorized booking screens can load them when needed.
+        notif.setMessage(String.format("New rental application for Unit %s (Move-in: %s)",
+                saved.getRoomNumber(), saved.getCheckIn()));
         notif.setType("info");
         notif.setIsRead(false);
         notif.setCreatedAt(LocalDateTime.now());
         notifRepo.save(notif);
 
-        logService.log("Booking Request", String.format("New booking from %s for Unit %s", saved.getGuestName(), saved.getRoomNumber()));
+        logService.log("Booking Request", String.format("New booking request for Unit %s", saved.getRoomNumber()));
         return saved;
     }
 

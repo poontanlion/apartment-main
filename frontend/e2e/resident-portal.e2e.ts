@@ -127,8 +127,9 @@ test.describe('Reporting a repair', () => {
       category: 'Plumbing',
       priority: 'High',
       status: 'Pending',
-      reporterEmail: resident.email,
     });
+    expect(tasks[0].reporterEmail).toBe(`${resident.email[0]}***@e2e.test`);
+    expect(tasks[0].reporterEmail).not.toBe(resident.email);
   });
 
   test('E2E-RP-07 form cannot be submitted without an issue description', async ({ page, request }) => {
