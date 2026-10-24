@@ -30,6 +30,31 @@ jobs:
           echo "$KUBECONFIG_DATA" > ~/.kube/config
           chmod 600 ~/.kube/config
 
+      - name: Create/Update DB Secret
+        env:
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          for v in DB_USERNAME DB_PASSWORD ADMIN_EMAIL ADMIN_PASSWORD; do
+            if [ -z "${!v}" ]; then echo "::error::GitHub secret $v is not set"; exit 1; fi
+          done
+          kubectl create secret generic apartment-db-secret \
+            --from-literal=DB_USERNAME="$DB_USERNAME" \
+            --from-literal=DB_PASSWORD="$DB_PASSWORD" \
+            --from-literal=POSTGRES_DB=apartmentdb \
+            --from-literal=POSTGRES_USER="$DB_USERNAME" \
+            --from-literal=POSTGRES_PASSWORD="$DB_PASSWORD" \
+            --from-literal=ADMIN_EMAIL="$ADMIN_EMAIL" \
+            --from-literal=ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply PostgreSQL
+        run: |
+          kubectl apply -f k8s/postgres.yaml
+          kubectl rollout status statefulset/postgres --timeout=180s
+
       - name: Apply ConfigMap
         run: kubectl apply -f k8s/configmap.yaml
 

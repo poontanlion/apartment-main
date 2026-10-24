@@ -1,7 +1,7 @@
 # Apartment Management System - คู่มือการติดตั้ง ตรวจสอบโค้ด และทดสอบระบบ
 
 โปรเจกต์นี้เป็นระบบบริหารจัดการหอพัก/อพาร์ตเมนต์ พัฒนาขึ้นโดยแบ่งออกเป็น 2 ส่วนหลักคือ:
-- **Backend:** Java Spring Boot 3 (RESTful API, Spring Data JPA, H2 In-Memory Database)
+- **Backend:** Java Spring Boot 3 (RESTful API, Spring Data JPA, PostgreSQL 16 + Flyway Migrations)
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS
 
 คู่มือฉบับนี้จัดทำขึ้นเพื่อให้ผู้ประเมินสามารถตรวจสอบทั้งซอร์สโค้ด (Source Code), การรันระบบ (Local/Docker/K8s), ชุดการทดสอบ (Automated Tests & Coverage), รวมถึงไปป์ไลน์ CI/CD (Pipeline as Code) ได้อย่างครบถ้วนโดยไม่ต้องตั้งค่าเพิ่มเติม
@@ -65,6 +65,8 @@
 ระบบมีการเขียน Test ครอบคลุมการทำงานทั้ง 9 Controller รวมทั้งสิ้น **69 Test Methods** เพื่อป้องกันข้อผิดพลาดและ Regression
 
 ### คำสั่งรันการทดสอบทั้งหมดผ่าน Local:
+> **ต้องเปิด Docker Desktop ไว้ก่อน** เพราะเทสที่ใช้ฐานข้อมูลจะสร้าง PostgreSQL ชั่วคราวผ่าน Testcontainers
+
 1. เข้าไปที่โฟลเดอร์ `backend`:
    ```bash
    cd backend
@@ -106,15 +108,24 @@
 #### สิ่งที่ต้องติดตั้ง
 - Node.js (v18+)
 - Java JDK (17+)
+- Docker Desktop (ใช้รัน PostgreSQL)
 
 #### ขั้นตอนการรัน
-1. **Backend:**
+1. **Database (PostgreSQL):** เปิด Terminal ในโฟลเดอร์ `apartment-main`
+   ```bash
+   cp .env.example .env        # แก้รหัสผ่านใน .env ได้ตามต้องการ
+   docker compose up -d db
+   ```
+   PostgreSQL จะเปิดที่ `localhost:5432` (database `apartmentdb`, user `apartment`)
+   ตาราง (schema) ถูกสร้างอัตโนมัติด้วย Flyway จากไฟล์ใน `backend/src/main/resources/db/migration/` ตอน Backend start
+2. **Backend:**
    ```bash
    cd backend
    mvnw.cmd spring-boot:run   # (หรือ ./mvnw spring-boot:run บน macOS/Linux)
    ```
    Backend จะเปิดทำงานที่ `http://localhost:8080`
-2. **Frontend:** เปิด Terminal อีกหน้าต่าง
+   (ถ้าเปลี่ยน user/password ใน `.env` ให้ตั้ง `DB_USERNAME` / `DB_PASSWORD` ให้ตรงกันก่อนรัน)
+3. **Frontend:** เปิด Terminal อีกหน้าต่าง
    ```bash
    cd frontend
    npm install
@@ -132,14 +143,18 @@
 #### ขั้นตอนการรัน
 1. เปิด Terminal ในโฟลเดอร์ `apartment-main` แล้วรัน:
    ```bash
-   docker-compose up --build -d
+   cp .env.example .env        # ครั้งแรกครั้งเดียว
+   docker compose up --build -d
    ```
+   ระบบจะเปิด 3 service: `db` (PostgreSQL), `backend` (รอจน db พร้อมก่อน start) และ `frontend`
 2. เข้าใช้งาน:
    - **Frontend:** `http://localhost` (พอร์ต 80)
    - **Backend API:** `http://localhost:8080`
+   - **PostgreSQL:** `localhost:5432`
 3. คำสั่งปิดระบบ:
    ```bash
-   docker-compose down
+   docker compose down        # ข้อมูลยังอยู่ใน volume pgdata
+   docker compose down -v     # ⚠️ ลบข้อมูลในฐานข้อมูลทิ้งทั้งหมด
    ```
 
 ---
@@ -157,16 +172,28 @@
    minikube start
    minikube status
    ```
-2. **Deploy ไปยังคลัสเตอร์:**
+2. **สร้าง Secret ของฐานข้อมูล** (ครั้งแรกครั้งเดียว ดูตัวอย่าง key ได้ที่ `k8s/secret.yaml.example`):
    ```bash
+   kubectl create secret generic apartment-db-secret \
+     --from-literal=DB_USERNAME=apartment --from-literal=DB_PASSWORD=<รหัสผ่าน> \
+     --from-literal=POSTGRES_DB=apartmentdb \
+     --from-literal=POSTGRES_USER=apartment --from-literal=POSTGRES_PASSWORD=<รหัสผ่าน> \
+     --from-literal=ADMIN_EMAIL=<อีเมลแอดมิน> --from-literal=ADMIN_PASSWORD=<รหัสผ่านแอดมิน>
+   ```
+   (บน CI ขั้นนี้ทำอัตโนมัติใน `deploy-k8s.yml` โดยต้องตั้ง GitHub Secrets `DB_USERNAME`, `DB_PASSWORD`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` ไว้ก่อน)
+3. **Deploy ไปยังคลัสเตอร์:**
+   ```bash
+   kubectl apply -f k8s/postgres.yaml
+   kubectl rollout status statefulset/postgres
    kubectl apply -f k8s/configmap.yaml
    kubectl apply -f k8s/deployment.yaml
    ```
-3. **ตรวจสอบสถานะ Pods (รอให้ขึ้น Running ครบ):**
+   ข้อมูลของ PostgreSQL ถูกเก็บใน PersistentVolume จึงไม่หายเมื่อ Pod restart
+4. **ตรวจสอบสถานะ Pods (รอให้ขึ้น Running ครบ):**
    ```bash
    kubectl get pods
    ```
-4. **เปิดเข้าใช้งานหน้าเว็บ:**
+5. **เปิดเข้าใช้งานหน้าเว็บ:**
    - วิธีที่ 1 (สะดวกที่สุด): รันคำสั่งเปิดเบราว์เซอร์อัตโนมัติ
      ```bash
      minikube service apartment-frontend-service
@@ -176,7 +203,7 @@
      kubectl port-forward service/apartment-frontend-service 30080:80
      ```
      แล้วเปิดเบราว์เซอร์ไปที่ `http://localhost:30080`
-5. **การเปลี่ยน Docker Image หรือย้อนเวอร์ชัน:**
+6. **การเปลี่ยน Docker Image หรือย้อนเวอร์ชัน:**
    หากต้องการเปลี่ยนไปใช้ Image อื่น (เช่น ย้อนกลับไปใช้ Tag หรือ Git SHA เก่าบน Docker Hub):
    - **วิธีที่ 1: เปลี่ยนผ่านคำสั่ง `kubectl set image`**
      ```bash
@@ -198,10 +225,12 @@
         ```bash
         kubectl apply -f k8s/deployment.yaml
         ```
-6. **คำสั่ง Cleanup เมื่อตรวจเสร็จ:**
+7. **คำสั่ง Cleanup เมื่อตรวจเสร็จ:**
    ```bash
    kubectl delete -f k8s/deployment.yaml
    kubectl delete -f k8s/configmap.yaml
+   kubectl delete -f k8s/postgres.yaml
+   kubectl delete pvc pgdata-postgres-0   # ⚠️ ลบข้อมูลฐานข้อมูลทิ้ง (ข้ามได้ถ้าอยากเก็บไว้)
    minikube stop
    ```
 
