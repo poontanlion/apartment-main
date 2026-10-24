@@ -23,8 +23,17 @@
       context: ./backend
       dockerfile: Dockerfile
     container_name: apartment-backend
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-apartmentdb}
+      DB_USERNAME: ${POSTGRES_USER:-apartment}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-apartment}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@victoryapartment.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
     ports:
       - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
