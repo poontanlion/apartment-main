@@ -35,6 +35,7 @@ public class Lease {
     private String billingCycle; // monthly, yearly
     private Double depositAmount;
     private String status; // Active, Terminated, Expired
+    @Column(columnDefinition = "text")
     private String notes;
     private LocalDateTime createdAt;
 
