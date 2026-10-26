@@ -1,10 +1,14 @@
+
 package com.victory.apartment.actuator;
+
+import com.victory.apartment.TestcontainersConfiguration;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -14,10 +18,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Integration tests for Spring Boot Actuator Health Check endpoints.
  * Verifies that the actuator library properly exposes health indicators,
- * including database connectivity and Kubernetes liveness/readiness probes.
+ * including PostgreSQL database connectivity and Kubernetes
+ * liveness/readiness probes.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(TestcontainersConfiguration.class)
 public class ActuatorHealthTest {
 
     @Autowired

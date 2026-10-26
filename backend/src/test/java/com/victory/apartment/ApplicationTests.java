@@ -1,9 +1,12 @@
+
 package com.victory.apartment;
 
 import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 
 import com.victory.apartment.repository.ActivityLogRepository;
 import com.victory.apartment.repository.AppNotificationRepository;
@@ -31,6 +34,7 @@ import com.victory.apartment.repository.UtilityBillRepository;
  * BookingControllerTest.
  */
 @SpringBootTest
+@Import(TestcontainersConfiguration.class)
 class ApplicationTests {
 
     @Autowired
@@ -78,7 +82,7 @@ class ApplicationTests {
      * What this test does:
      * - Starts the complete Spring Boot application.
      * - Loads configuration, controllers, services and repositories.
-     * - Uses the H2 in-memory database configured for testing.
+     * - Uses PostgreSQL through Testcontainers for testing.
      *
      * Expected result:
      * - The test passes if Spring can start without
