@@ -3,24 +3,16 @@ package com.victory.apartment.config;
 import com.victory.apartment.model.*;
 import com.victory.apartment.repository.*;
 import jakarta.annotation.PostConstruct;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Profile;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
 @Component
+@Profile("!prod & !test")
 public class DataSeeder {
-
-    @Value("${app.admin.email:${ADMIN_EMAIL:admin@victoryapartment.com}}")
-    private String adminEmail;
-
-    @Value("${app.admin.password:${ADMIN_PASSWORD:admin}}")
-    private String adminPassword;
-
-    @Value("${app.admin.username:${ADMIN_USERNAME:admin}}")
-    private String adminUsername;
 
     private final BuildingRepository buildingRepo;
     private final RoomRepository roomRepo;
@@ -33,7 +25,6 @@ public class DataSeeder {
     private final ScheduledReminderRepository reminderRepo;
     private final AppNotificationRepository notifRepo;
     private final ActivityLogRepository activityRepo;
-    private final AppUserRepository userRepo;
 
     public DataSeeder(
             BuildingRepository buildingRepo,
@@ -41,8 +32,7 @@ public class DataSeeder {
             LeaseRepository leaseRepo, UtilityBillRepository billRepo,
             MaintenanceTaskRepository taskRepo, SupplyItemRepository supplyRepo,
             MaintenanceLogRepository logRepo, ScheduledReminderRepository reminderRepo,
-            AppNotificationRepository notifRepo, ActivityLogRepository activityRepo,
-            AppUserRepository userRepo) {
+            AppNotificationRepository notifRepo, ActivityLogRepository activityRepo) {
         this.buildingRepo = buildingRepo;
         this.roomRepo = roomRepo;
         this.tenantRepo = tenantRepo;
@@ -54,31 +44,27 @@ public class DataSeeder {
         this.reminderRepo = reminderRepo;
         this.notifRepo = notifRepo;
         this.activityRepo = activityRepo;
-        this.userRepo = userRepo;
     }
 
     @PostConstruct
     public void seed() {
-        seedBuildings();
-        seedUsers();
-
-        // If rooms already exist, update image paths to the new 3-image sets
-        if (roomRepo.count() > 0) {
-            updateRoomImages();
-            return;
-        }
-
-        seedRooms();
-        seedTenants();
-        seedLeases();
-        seedUtilityBills();
-        seedSupplies();
-        seedMaintenanceTasks();
-        seedMaintenanceLogs();
-        seedReminders();
-        seedNotifications();
-        seedActivityLog();
+    // Avoid modifying existing room and tenant data on restart.
+    if (roomRepo.count() > 0) {
+        return;
     }
+
+    seedBuildings();
+    seedRooms();
+    seedTenants();
+    seedLeases();
+    seedUtilityBills();
+    seedSupplies();
+    seedMaintenanceTasks();
+    seedMaintenanceLogs();
+    seedReminders();
+    seedNotifications();
+    seedActivityLog();
+}
 
     private void updateRoomImages() {
         boolean hasOldUnprefixedRooms = roomRepo.findAll().stream().anyMatch(r -> !r.getRoomNumber().startsWith("A") && !r.getRoomNumber().startsWith("B"));
@@ -205,16 +191,6 @@ public class DataSeeder {
         }
     }
 
-    private void seedUsers() {
-        if (!userRepo.existsByEmail(adminEmail)) {
-            AppUser admin = new AppUser("usr-admin-01", adminEmail, adminPassword, "Victory Admin", "081-234-5678", "admin");
-            userRepo.save(admin);
-        }
-        if (!adminEmail.equalsIgnoreCase(adminUsername) && !userRepo.existsByEmail(adminUsername)) {
-            AppUser adminAlias = new AppUser("usr-admin-02", adminUsername, adminPassword, "Victory Admin", "081-234-5678", "admin");
-            userRepo.save(adminAlias);
-        }
-    }
 
     private void seedRooms() {
         // Assigned tenants map: roomNum -> [tenantName, tenantId, status, rent, type]
