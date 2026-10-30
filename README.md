@@ -71,14 +71,20 @@
    ```bash
    cd backend
    ```
-2. สั่งรันคำสั่ง Maven Test:
-   - **Windows:**
+2. สั่งรันคำสั่ง Maven Test โดยกำหนดเวอร์ชัน Docker API เป็น `1.44`:
+   - **Windows (cmd):**
      ```cmd
+     set JAVA_TOOL_OPTIONS=-Dapi.version=1.44
      mvnw.cmd test
+     ```
+   - **Windows (PowerShell):**
+     ```powershell
+     $env:JAVA_TOOL_OPTIONS="-Dapi.version=1.44"
+     .\mvnw.cmd test
      ```
    - **macOS / Linux:**
      ```bash
-     ./mvnw test
+     JAVA_TOOL_OPTIONS="-Dapi.version=1.44" ./mvnw test
      ```
 
 ### การตรวจสอบรายงานผลการทดสอบ (Test Results & Reports):
@@ -174,12 +180,28 @@
    ```
 2. **สร้าง Secret ของฐานข้อมูล** (ครั้งแรกครั้งเดียว ดูตัวอย่าง key ได้ที่ `k8s/secret.yaml.example`):
    ```bash
+   DB_USER='apartment'
+   DB_PASS='MyDbPass123'
    kubectl create secret generic apartment-db-secret \
-     --from-literal=DB_USERNAME=apartment --from-literal=DB_PASSWORD=<รหัสผ่าน> \
-     --from-literal=POSTGRES_DB=apartmentdb \
-     --from-literal=POSTGRES_USER=apartment --from-literal=POSTGRES_PASSWORD=<รหัสผ่าน> \
-     --from-literal=ADMIN_EMAIL=<อีเมลแอดมิน> --from-literal=ADMIN_PASSWORD=<รหัสผ่านแอดมิน>
+     --from-literal=DB_USERNAME="$DB_USER" \
+     --from-literal=DB_PASSWORD="$DB_PASS" \
+     --from-literal=POSTGRES_DB='apartmentdb' \
+     --from-literal=POSTGRES_USER="$DB_USER" \
+     --from-literal=POSTGRES_PASSWORD="$DB_PASS" \
+     --from-literal=ADMIN_EMAIL='admin@victoryapartment.com' \
+     --from-literal=ADMIN_PASSWORD='MyAdminPass456'
    ```
+
+   | Key | ใส่อะไร | กฎ |
+   |---|---|---|
+   | `DB_USERNAME` / `POSTGRES_USER` | ชื่อ user ของ database | สองค่านี้ต้องตรงกัน (ตัวอย่างใช้ตัวแปร `DB_USER` ให้แล้ว) |
+   | `DB_PASSWORD` / `POSTGRES_PASSWORD` | รหัสผ่าน database (แอปใช้ ไม่ต้องจำ) | สองค่านี้ต้องตรงกัน (ตัวอย่างใช้ตัวแปร `DB_PASS` ให้แล้ว) |
+   | `POSTGRES_DB` | ชื่อ database | ใช้ `apartmentdb` |
+   | `ADMIN_EMAIL` | อีเมลสำหรับล็อกอินหน้าเว็บเป็นแอดมิน | ไม่จำเป็นต้องเป็นอีเมลจริง |
+   | `ADMIN_PASSWORD` | รหัสผ่านสำหรับล็อกอินหน้าเว็บเป็นแอดมิน | ห้ามว่าง ห้ามเป็น `admin` และควรยาว 6 ตัวขึ้นไป |
+
+   ค่าในตัวอย่างเปลี่ยนเป็นของตัวเองได้ และแต่ละคนไม่จำเป็นต้องใช้ค่าเดียวกัน เพราะ Minikube ของแต่ละเครื่องแยกกัน ถ้ารหัสผ่านมีอักขระพิเศษ เช่น `$ ! & #` ให้ครอบด้วย single quote `'...'`
+
    (บน CI ขั้นนี้ทำอัตโนมัติใน `deploy-k8s.yml` โดยต้องตั้ง GitHub Secrets `DB_USERNAME`, `DB_PASSWORD`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` ไว้ก่อน)
 3. **Deploy ไปยังคลัสเตอร์:**
    ```bash
