@@ -6,9 +6,15 @@
 
 คู่มือฉบับนี้จัดทำขึ้นเพื่อให้ผู้ประเมินสามารถตรวจสอบทั้งซอร์สโค้ด (Source Code), การรันระบบ (Local/Docker/K8s), ชุดการทดสอบ (Automated Tests & Coverage), รวมถึงไปป์ไลน์ CI/CD (Pipeline as Code) ได้อย่างครบถ้วนโดยไม่ต้องตั้งค่าเพิ่มเติม
 
+
+> 🔑 **ผู้ตรวจดูก่อน:** บัญชีทดสอบ, รหัสผ่าน Demo, ข้อมูลจำลอง และ Flow การทดสอบ อยู่ในเอกสาร **[DEMO_GUIDE.md](DEMO_GUIDE.md)**
+> - **Admin:** `admin@victoryapartment.com` (หรือ `admin`) / รหัสผ่านตาม `ADMIN_PASSWORD` (ไม่มี `.env` = `admin`, คัดลอกจาก `.env.example` = `change-me`)
+> - **User:** ไม่มีบัญชีสำเร็จรูป ให้สมัครเองที่ `/register`
+
 ---
 
 ## สารบัญ
+0. [บัญชีทดสอบและข้อมูล Demo](DEMO_GUIDE.md)
 1. [โครงสร้างโค้ดและส่วนประกอบสำคัญ (Codebase Structure)](#1-โครงสร้างโค้ดและส่วนประกอบสำคัญ-codebase-structure)
 2. [การตรวจสอบ Pipeline as Code (CI/CD Workflows)](#2-การตรวจสอบ-pipeline-as-code-cicd-workflows)
 3. [การรันและตรวจสอบ Tests (Unit Tests & Coverage)](#3-การรันและตรวจสอบ-tests-unit-tests--coverage)
