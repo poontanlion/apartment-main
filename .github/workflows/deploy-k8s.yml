@@ -1,0 +1,99 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_run:
+    workflows: ["Docker Build and Publish"]
+    types:
+      - completed
+    branches: ["main", "develop"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Kubernetes Cluster
+    runs-on: ubuntu-latest
+    # Only deploy if Docker Build and Publish was successful (or triggered manually)
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up kubeconfig
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_DATA" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Create/Update DB Secret
+        env:
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          for v in DB_USERNAME DB_PASSWORD ADMIN_EMAIL ADMIN_PASSWORD; do
+            if [ -z "${!v}" ]; then echo "::error::GitHub secret $v is not set"; exit 1; fi
+          done
+          kubectl create secret generic apartment-db-secret \
+            --from-literal=DB_USERNAME="$DB_USERNAME" \
+            --from-literal=DB_PASSWORD="$DB_PASSWORD" \
+            --from-literal=POSTGRES_DB=apartmentdb \
+            --from-literal=POSTGRES_USER="$DB_USERNAME" \
+            --from-literal=POSTGRES_PASSWORD="$DB_PASSWORD" \
+            --from-literal=ADMIN_EMAIL="$ADMIN_EMAIL" \
+            --from-literal=ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply PostgreSQL
+        run: |
+          kubectl apply -f k8s/postgres.yaml
+          kubectl rollout status statefulset/postgres --timeout=180s
+
+      - name: Apply ConfigMap
+        run: kubectl apply -f k8s/configmap.yaml
+
+      - name: Apply Deployment and Services
+        run: kubectl apply -f k8s/deployment.yaml
+
+      - name: Update Backend image to latest commit
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          DOCKER_USER="${DOCKERHUB_USERNAME:-pixiz}"
+          kubectl set image deployment/apartment-backend-deployment \
+            backend="${DOCKER_USER}/apartment-backend:sha-${{ github.sha }}"
+
+      - name: Update Frontend image to latest commit
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          DOCKER_USER="${DOCKERHUB_USERNAME:-pixiz}"
+          kubectl set image deployment/apartment-frontend-deployment \
+            frontend="${DOCKER_USER}/apartment-frontend:sha-${{ github.sha }}"
+
+      - name: Wait for Backend rollout
+        run: kubectl rollout status deployment/apartment-backend-deployment --timeout=120s
+
+      - name: Wait for Frontend rollout
+        run: kubectl rollout status deployment/apartment-frontend-deployment --timeout=120s
+
+      - name: Report Result
+        if: always()
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          DOCKER_USER="${DOCKERHUB_USERNAME:-pixiz}"
+          {
+            echo "## Deploy to Kubernetes Report"
+            echo "- Status: ${{ job.status }}"
+            echo "- Trigger: ${{ github.event_name }}"
+            echo "- Commit: sha-${{ github.sha }}"
+            echo "- Backend image: ${DOCKER_USER}/apartment-backend:sha-${{ github.sha }}"
+            echo "- Frontend image: ${DOCKER_USER}/apartment-frontend:sha-${{ github.sha }}"
+          } >> "$GITHUB_STEP_SUMMARY"

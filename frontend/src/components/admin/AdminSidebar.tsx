@@ -3,11 +3,12 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileSignature, FileText, Wrench,
   BedDouble, History, Bell, ArrowLeft, Building2, CalendarCheck,
-  Sun, Moon, Menu, X, Globe
+  Sun, Moon, Menu, X, Globe, KeyRound
 } from 'lucide-react';
 import { getNotifications, getBookings } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 export const AdminSidebar: React.FC = () => {
   const location = useLocation();
@@ -16,6 +17,7 @@ export const AdminSidebar: React.FC = () => {
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [pendingBookingCount, setPendingBookingCount] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchCounts = async () => {
@@ -43,17 +45,16 @@ export const AdminSidebar: React.FC = () => {
     };
   }, [location.pathname]);
 
-  interface NavItem {
-    name: string;
-    path: string;
-    icon: any;
-    badge?: number;
-  }
-
-  const navItems: NavItem[] = [
+  const navItems = [
     { name: t('admin.nav.dashboard'), path: '/admin/dashboard', icon: LayoutDashboard },
     { name: t('admin.nav.buildings'), path: '/admin/buildings', icon: Building2 },
+    { name: t('admin.nav.tenants'), path: '/admin/tenants', icon: FileSignature },
+    { name: t('admin.nav.utilityBills'), path: '/admin/utility-bills', icon: FileText },
+    { name: t('admin.nav.maintenance'), path: '/admin/maintenance', icon: Wrench },
     { name: t('admin.nav.rooms'), path: '/admin/rooms', icon: BedDouble },
+    { name: t('admin.nav.bookings'), path: '/admin/bookings', icon: CalendarCheck, badge: pendingBookingCount },
+    { name: t('admin.nav.activityLog'), path: '/admin/activity-log', icon: History },
+    { name: t('admin.nav.notifications'), path: '/admin/notifications', icon: Bell, badge: unreadNotifCount },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -172,8 +173,23 @@ export const AdminSidebar: React.FC = () => {
             })}
 
             <div className="pt-4 border-t border-neutral-800 space-y-2">
+              <button
+                onClick={() => {
+                  setMobileOpen(false);
+                  setPasswordModalOpen(true);
+                }}
+                className="flex items-center justify-between w-full bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold uppercase tracking-wider px-4 py-3 rounded-full transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-amber-400" />
+                  <span>{t('admin.nav.changePassword')}</span>
+                </div>
+                <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  ROTATION
+                </span>
+              </button>
               <Link
-                to="/"
+                to="/rooms"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center justify-center gap-2 w-full bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold py-3 rounded-full uppercase tracking-wider transition-colors"
               >
@@ -266,8 +282,21 @@ export const AdminSidebar: React.FC = () => {
               </span>
             </button>
 
+            <button
+              onClick={() => setPasswordModalOpen(true)}
+              className="flex items-center justify-between w-full bg-neutral-800/80 hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider px-4 py-2.5 rounded-full transition-colors active:scale-95"
+            >
+              <span className="flex items-center gap-2">
+                <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                <span>{t('admin.nav.changePassword')}</span>
+              </span>
+              <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                ROTATION
+              </span>
+            </button>
+
             <Link
-              to="/"
+              to="/rooms"
               className="flex items-center justify-center gap-2 w-full bg-neutral-800/80 hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider py-2.5 rounded-full transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> {t('admin.nav.backToPublic')}
@@ -276,6 +305,12 @@ export const AdminSidebar: React.FC = () => {
 
         </div>
       </aside>
+
+      {/* PASSWORD ROTATION MODAL */}
+      <ChangePasswordModal
+        isOpen={passwordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+      />
     </>
   );
 };

@@ -1,38 +1,55 @@
 import React, { useState } from 'react';
-import { Room, MaintenanceLog } from '../../types';
+import { Room, MaintenanceLog, Booking, Building } from '../../types';
 import { formatCurrency, formatSuppliesSummary } from '../../utils/formatters';
-import { UserCheck, Wrench, Home, X } from 'lucide-react';
+import { UserCheck, Wrench, Home, X, Clock } from 'lucide-react';
 import { getMaintenanceLogs } from '../../services/api';
 import { useLanguage } from '../../context/LanguageContext';
 
 interface ApartmentFloorGridProps {
   rooms: Room[];
+  buildings: Building[];
+  bookings?: Booking[];
   onSelectRoom?: (room: Room) => void;
   onRefresh?: () => void;
 }
 
-export const ApartmentFloorGrid: React.FC<ApartmentFloorGridProps> = ({ rooms, onSelectRoom }) => {
+export const ApartmentFloorGrid: React.FC<ApartmentFloorGridProps> = ({ rooms, buildings, bookings = [], onSelectRoom }) => {
   const { t, language } = useLanguage();
-  const [selectedBuilding, setSelectedBuilding] = useState<'all' | 'bld-1' | 'bld-2'>('all');
+  const [selectedBuilding, setSelectedBuilding] = useState<string>('all');
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [roomLogs, setRoomLogs] = useState<MaintenanceLog[]>([]);
   const [activeTab, setActiveTab] = useState<'info' | 'logs'>('info');
 
   // --- EASY TO EDIT BUILDING & FLOOR LOGIC ---
-  // 1. Group by Building
-  const buildingARooms = rooms.filter(r => r.buildingId === 'bld-1' || r.roomNumber.startsWith('A') || !r.roomNumber.startsWith('B'));
-  const buildingBRooms = rooms.filter(r => r.buildingId === 'bld-2' || r.roomNumber.startsWith('B'));
+  // 1. Build the selector from saved buildings; keep A/B fallbacks for older data.
+  const buildingOptions = [...buildings];
+  if (!buildingOptions.some(building => building.id === 'bld-1')) {
+    buildingOptions.push({ id: 'bld-1', name: 'อาคาร A', code: 'A', floors: 0, totalRooms: 0 });
+  }
+  if (!buildingOptions.some(building => building.id === 'bld-2')) {
+    buildingOptions.push({ id: 'bld-2', name: 'อาคาร B', code: 'B', floors: 0, totalRooms: 0 });
+  }
 
+  const getRoomsForBuilding = (buildingId: string) => rooms.filter(room => {
+    if (room.buildingId) return room.buildingId === buildingId;
+    const roomNumber = (room.roomNumber || '').toUpperCase();
+    if (buildingId === 'bld-2') return roomNumber.startsWith('B');
+    if (buildingId === 'bld-1') return !roomNumber.startsWith('B');
+    return false;
+  });
+  const buildingRoomCounts = new Map(buildingOptions.map(building => [building.id, getRoomsForBuilding(building.id).length]));
   // 2. Select active rooms list based on selected building tab
-  const displayRooms = selectedBuilding === 'bld-1' 
-    ? buildingARooms 
-    : selectedBuilding === 'bld-2' 
-      ? buildingBRooms 
-      : rooms;
+  const displayRooms = selectedBuilding === 'all' ? rooms : getRoomsForBuilding(selectedBuilding);
+  const selectedBuildingName = selectedBuilding === 'bld-1'
+    ? (buildingOptions.find(building => building.id === selectedBuilding)?.name || (language === 'th' ? 'อาคาร A' : 'Building A'))
+    : selectedBuilding === 'bld-2'
+      ? (buildingOptions.find(building => building.id === selectedBuilding)?.name || (language === 'th' ? 'อาคาร B' : 'Building B'))
+      : selectedBuilding !== 'all'
+        ? buildingOptions.find(building => building.id === selectedBuilding)?.name || selectedBuilding
+      : (language === 'th' ? 'ทุกอาคาร' : 'All Buildings');
 
-  // 3. Separate active rooms into Floor 1 & Floor 2
-  const floor1Rooms = displayRooms.filter(r => r.floor === 1).sort((a, b) => (a.roomNumber || '').localeCompare(b.roomNumber || ''));
-  const floor2Rooms = displayRooms.filter(r => r.floor === 2).sort((a, b) => (a.roomNumber || '').localeCompare(b.roomNumber || ''));
+  // 3. Get all unique floors dynamically and sort them ascending
+  const uniqueFloors = Array.from(new Set(displayRooms.map(r => r.floor || 1))).sort((a, b) => a - b);
 
   const handleRoomClick = async (room: Room) => {
     setSelectedRoom(room);
@@ -107,7 +124,10 @@ export const ApartmentFloorGrid: React.FC<ApartmentFloorGridProps> = ({ rooms, o
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
         {floorRooms.map((room) => {
           const badge = getStatusBadge(room.status);
-          const isBld2 = room.buildingId === 'bld-2' || room.roomNumber.startsWith('B');
+          const isBld2 = room.buildingId
+            ? room.buildingId === 'bld-2'
+            : room.roomNumber.toUpperCase().startsWith('B');
+          const isLegacyABuilding = room.buildingId === 'bld-1' || !room.buildingId;
           return (
             <button
               key={room.id}
@@ -130,22 +150,40 @@ export const ApartmentFloorGrid: React.FC<ApartmentFloorGridProps> = ({ rooms, o
                     {room.roomType}
                   </span>
                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                    isBld2 ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                    isBld2 ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : isLegacyABuilding ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
                   }`}>
-                    {isBld2 ? (language === 'th' ? 'ตึก B' : 'Bldg B') : (language === 'th' ? 'ตึก A' : 'Bldg A')}
+                    {isBld2 ? (language === 'th' ? 'ตึก B' : 'Bldg B') : isLegacyABuilding ? (language === 'th' ? 'ตึก A' : 'Bldg A') : room.buildingName || room.buildingId}
                   </span>
                 </div>
 
-                {room.currentTenantName ? (
-                  <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 truncate flex items-center gap-1">
-                    <UserCheck className="w-3 h-3 flex-shrink-0" />
-                    {room.currentTenantName}
-                  </div>
-                ) : (
-                  <div className="text-xs text-slate-400 dark:text-slate-400 italic">
-                    ({language === 'th' ? 'ไม่มีผู้เช่า' : 'No Tenant'})
-                  </div>
-                )}
+                {(() => {
+                  const activeBooking = bookings.find(
+                    b => (b.roomId === room.id || b.roomNumber === room.roomNumber) &&
+                         (b.status === 'Approved' || b.status === 'Pending')
+                  );
+                  if (room.currentTenantName) {
+                    return (
+                      <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 truncate flex items-center gap-1">
+                        <UserCheck className="w-3 h-3 flex-shrink-0" />
+                        {room.currentTenantName}
+                      </div>
+                    );
+                  }
+                  if (room.status === 'Reserved' || activeBooking) {
+                    const guestName = activeBooking?.guestName || (language === 'th' ? 'มีผู้จองแล้ว' : 'Booked Guest');
+                    return (
+                      <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 truncate flex items-center gap-1">
+                        <Clock className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">{language === 'th' ? `จอง: ${guestName}` : `Booked: ${guestName}`}</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="text-xs text-slate-400 dark:text-slate-400 italic">
+                      ({language === 'th' ? 'ไม่มีผู้เช่า' : 'No Tenant'})
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="mt-3 pt-2.5 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between w-full text-xs">
@@ -180,43 +218,44 @@ export const ApartmentFloorGrid: React.FC<ApartmentFloorGridProps> = ({ rooms, o
           >
             {language === 'th' ? `ทุกอาคาร (${rooms.length} ห้อง)` : `All Buildings (${rooms.length} Units)`}
           </button>
-          <button
-            onClick={() => setSelectedBuilding('bld-1')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
-              selectedBuilding === 'bld-1'
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            {language === 'th' ? `อาคาร A (${buildingARooms.length} ห้อง)` : `Building A (${buildingARooms.length} Units)`}
-          </button>
-          <button
-            onClick={() => setSelectedBuilding('bld-2')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
-              selectedBuilding === 'bld-2'
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            {language === 'th' ? `อาคาร B (${buildingBRooms.length} ห้อง)` : `Building B (${buildingBRooms.length} Units)`}
-          </button>
+          {buildingOptions.map(building => (
+            <button
+              key={building.id}
+              onClick={() => setSelectedBuilding(building.id)}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                selectedBuilding === building.id
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              {building.name} ({buildingRoomCounts.get(building.id) || 0} {language === 'th' ? 'ห้อง' : 'Units'})
+            </button>
+          ))}
         </div>
 
         <span className="text-xs font-medium text-slate-500 dark:text-slate-400 px-2">
           {language === 'th' ? 'กำลังแสดง: ' : 'Showing: '}
-          {selectedBuilding === 'bld-1'
-            ? (language === 'th' ? 'อาคาร A' : 'Building A')
-            : selectedBuilding === 'bld-2'
-              ? (language === 'th' ? 'อาคาร B' : 'Building B')
-              : (language === 'th' ? 'ทุกอาคาร' : 'All Buildings')}
+          {selectedBuildingName}
         </span>
       </div>
 
-      {/* Floor 1 Grid */}
-      {renderFloorGrid(language === 'th' ? 'ชั้น 1' : 'Floor 1', floor1Rooms)}
-
-      {/* Floor 2 Grid */}
-      {renderFloorGrid(language === 'th' ? 'ชั้น 2' : 'Floor 2', floor2Rooms)}
+      {/* Dynamic Floor Grids */}
+      {uniqueFloors.length === 0 ? (
+        <div className="text-center py-10 text-slate-400 italic">
+          {language === 'th' ? 'ไม่มีห้องพักสำหรับอาคารนี้' : 'No units found for this building'}
+        </div>
+      ) : (
+        uniqueFloors.map(floorNum => {
+          const floorRooms = displayRooms
+            .filter(r => r.floor === floorNum)
+            .sort((a, b) => (a.roomNumber || '').localeCompare(b.roomNumber || ''));
+          return (
+            <React.Fragment key={floorNum}>
+              {renderFloorGrid(language === 'th' ? `ชั้น ${floorNum}` : `Floor ${floorNum}`, floorRooms)}
+            </React.Fragment>
+          );
+        })
+      )}
 
       {/* Quick Room Details Modal */}
       {selectedRoom && (
@@ -286,10 +325,32 @@ export const ApartmentFloorGrid: React.FC<ApartmentFloorGridProps> = ({ rooms, o
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-nike-mute dark:text-nike-stone block">{language === 'th' ? 'ผู้เช่าปัจจุบัน' : 'Current Tenant'}</span>
-                    <span className="font-semibold text-blue-600 dark:text-blue-400 block mt-0.5">
-                      {selectedRoom.currentTenantName || (language === 'th' ? 'ไม่มีผู้เช่า' : 'No Active Tenant')}
-                    </span>
+                    <span className="text-xs text-nike-mute dark:text-nike-stone block">{language === 'th' ? 'ผู้เช่า/ผู้จอง' : 'Current Tenant / Guest'}</span>
+                    {(() => {
+                      const activeBooking = bookings.find(
+                        b => (b.roomId === selectedRoom.id || b.roomNumber === selectedRoom.roomNumber) &&
+                             (b.status === 'Approved' || b.status === 'Pending')
+                      );
+                      if (selectedRoom.currentTenantName) {
+                        return (
+                          <span className="font-semibold text-blue-600 dark:text-blue-400 block mt-0.5">
+                            {selectedRoom.currentTenantName}
+                          </span>
+                        );
+                      }
+                      if (selectedRoom.status === 'Reserved' || activeBooking) {
+                        return (
+                          <span className="font-semibold text-amber-600 dark:text-amber-400 block mt-0.5">
+                            {activeBooking ? `${activeBooking.guestName} (${language === 'th' ? 'ติดจอง' : 'Booked'})` : (language === 'th' ? 'มีผู้จองแล้ว' : 'Reserved')}
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="text-slate-400 dark:text-slate-400 italic block mt-0.5">
+                          {language === 'th' ? 'ไม่มีผู้เช่า' : 'No Active Tenant'}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
 

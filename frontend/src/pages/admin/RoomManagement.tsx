@@ -55,20 +55,18 @@ export const RoomManagement: React.FC = () => {
       const targetBld = allBlds.find(b => b.id === bldId || b.code === bldId);
 
       result = result.filter(r => {
-        // Direct ID match
-        if (targetBld && r.buildingId === targetBld.id) return true;
-        if (r.buildingId === bldId) return true;
+        // A stored buildingId is authoritative. Do not classify rooms from
+        // other buildings as A/B based only on their room number.
+        if (r.buildingId) return targetBld ? r.buildingId === targetBld.id : r.buildingId === bldId;
 
-        // Building B identification (check code or explicit ID 'bld-2')
-        const isBldB = (targetBld && (targetBld.code === 'B' || targetBld.id === 'bld-2')) || bldId === 'bld-2';
-        const isBldA = (targetBld && (targetBld.code === 'A' || targetBld.id === 'bld-1')) || bldId === 'bld-1';
-
-        const roomIsB = r.buildingId === 'bld-2' || (r.roomNumber && r.roomNumber.toUpperCase().startsWith('B'));
-
+        // Legacy room records without a buildingId can only be assigned to
+        // the original A/B buildings by their room-number prefix.
+        const roomIsB = (r.roomNumber || '').toUpperCase().startsWith('B');
+        const isBldB = targetBld?.id === 'bld-2' || bldId === 'bld-2';
+        const isBldA = targetBld?.id === 'bld-1' || bldId === 'bld-1';
         if (isBldB) return roomIsB;
         if (isBldA) return !roomIsB;
-
-        return r.buildingId === bldId;
+        return false;
       });
     }
     setFilteredRooms(result);
@@ -82,6 +80,8 @@ export const RoomManagement: React.FC = () => {
       }
       return room.buildingName;
     }
+    const building = buildings.find(item => item.id === room.buildingId);
+    if (building) return building.name;
     if (room.buildingId === 'bld-2' || (room.roomNumber && room.roomNumber.toUpperCase().startsWith('B'))) {
       return language === 'th' ? 'อาคาร B (Victory Residence B)' : 'Building B (Victory Residence B)';
     }

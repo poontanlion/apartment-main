@@ -3,10 +3,10 @@ import {
   Building2, CheckCircle2, Wrench,
   DollarSign, BellRing, FileText, PlusCircle, RotateCw
 } from 'lucide-react';
-import { Room, Lease, UtilityBill, MaintenanceTask, ScheduledReminder } from '../../types';
+import { Room, Lease, UtilityBill, MaintenanceTask, ScheduledReminder, Booking, Building } from '../../types';
 import {
   getRooms, getLeases, getUtilityBills,
-  getMaintenanceTasks, getReminders
+  getMaintenanceTasks, getReminders, getBookings, getBuildings
 } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import { ApartmentFloorGrid } from '../../components/admin/ApartmentFloorGrid';
@@ -17,19 +17,32 @@ import { toast } from 'sonner';
 export const AdminDashboard: React.FC = () => {
   const { t, language } = useLanguage();
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [buildings, setBuildings] = useState<Building[]>([]);
   const [leases, setLeases] = useState<Lease[]>([]);
   const [bills, setBills] = useState<UtilityBill[]>([]);
   const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
   const [reminders, setReminders] = useState<ScheduledReminder[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchDashboardData = async () => {
     try {
-      setRooms(await getRooms());
-      setLeases(await getLeases());
-      setBills(await getUtilityBills());
-      setTasks(await getMaintenanceTasks());
-      setReminders(await getReminders());
+      const [roomsData, leasesData, billsData, tasksData, remindersData, bookingsData, buildingsData] = await Promise.all([
+        getRooms(),
+        getLeases(),
+        getUtilityBills(),
+        getMaintenanceTasks(),
+        getReminders(),
+        getBookings(),
+        getBuildings(),
+      ]);
+      setRooms(roomsData);
+      setBuildings(buildingsData);
+      setLeases(leasesData);
+      setBills(billsData);
+      setTasks(tasksData);
+      setReminders(remindersData);
+      setBookings(bookingsData);
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err);
     }
@@ -47,7 +60,8 @@ export const AdminDashboard: React.FC = () => {
   }, []);
 
   const totalUnits = rooms.length;
-  const occupiedCount = rooms.filter(r => r.status === 'Occupied').length;
+  // Reserved = booking approved → counts as in-use for occupancy metrics
+  const occupiedCount = rooms.filter(r => r.status === 'Occupied' || r.status === 'Reserved').length;
   const availableCount = rooms.filter(r => r.status === 'Available').length;
   const maintenanceCount = rooms.filter(r => r.status === 'Maintenance').length;
   const reservedCount = rooms.filter(r => r.status === 'Reserved').length;
@@ -56,7 +70,7 @@ export const AdminDashboard: React.FC = () => {
 
   const totalMonthlyRent = leases
     .filter(l => l.status === 'Active')
-    .reduce((sum, l) => sum + l.rentAmount, 0);
+    .reduce((sum, l) => sum + (l.rentAmount || 0), 0);
 
   const pendingBills = bills.filter(b => b.status === 'Pending');
   const activeTasks = tasks.filter(t => t.status !== 'Completed');
@@ -208,7 +222,7 @@ export const AdminDashboard: React.FC = () => {
           </button>
         </div>
 
-        <ApartmentFloorGrid rooms={rooms} onRefresh={fetchDashboardData} />
+        <ApartmentFloorGrid rooms={rooms} buildings={buildings} bookings={bookings} onRefresh={fetchDashboardData} />
       </div>
 
       {/* LOWER WIDGETS */}

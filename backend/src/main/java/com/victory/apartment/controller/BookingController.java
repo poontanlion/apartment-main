@@ -1,0 +1,227 @@
+package com.victory.apartment.controller;
+
+import com.victory.apartment.model.Booking;
+import com.victory.apartment.model.AppNotification;
+import com.victory.apartment.model.Lease;
+import com.victory.apartment.repository.BookingRepository;
+import com.victory.apartment.repository.RoomRepository;
+import com.victory.apartment.repository.AppNotificationRepository;
+import com.victory.apartment.service.ActivityLogService;
+import com.victory.apartment.service.LeaseService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/bookings")
+public class BookingController {
+
+    private static class BookingConflictException extends ResponseStatusException {
+        private final String code;
+
+        BookingConflictException(String code, String message) {
+            super(HttpStatus.CONFLICT, message);
+            this.code = code;
+        }
+    }
+
+    @ExceptionHandler(BookingConflictException.class)
+    public ResponseEntity<Map<String, String>> handleBookingConflict(BookingConflictException exception) {
+        return ResponseEntity.status(exception.getStatusCode())
+                .body(Map.of("code", exception.code, "message", exception.getReason()));
+    }
+
+    private final BookingRepository repo;
+    private final RoomRepository roomRepo;
+    private final AppNotificationRepository notifRepo;
+    private final ActivityLogService logService;
+    private final LeaseService leaseService;
+
+    public BookingController(
+            BookingRepository repo,
+            RoomRepository roomRepo,
+            AppNotificationRepository notifRepo,
+            ActivityLogService logService,
+            LeaseService leaseService) {
+        this.repo = repo;
+        this.roomRepo = roomRepo;
+        this.notifRepo = notifRepo;
+        this.logService = logService;
+        this.leaseService = leaseService;
+    }
+
+    // A room can be Available while holding a future lease, so dates must be checked against active leases.
+    private void ensureNoLeaseConflict(Booking booking) {
+        if (booking.getRoomId() == null || booking.getCheckIn() == null || booking.getCheckOut() == null) return;
+        Map<String, Object> conflict;
+        try {
+            conflict = leaseService.checkConflict(booking.getRoomId(), booking.getCheckIn(), booking.getCheckOut(), null);
+        } catch (DateTimeParseException ex) {
+            return;
+        }
+        if (Boolean.TRUE.equals(conflict.get("hasConflict"))) {
+            Lease lease = (Lease) conflict.get("conflictingLease");
+            throw new BookingConflictException(
+                "LEASE_DATE_CONFLICT",
+                String.format("ห้องนี้มีสัญญาเช่าช่วง %s ถึง %s แล้ว กรุณาเปลี่ยนช่วงวันที่หรือเลือกห้องว่างอื่น",
+                        lease.getCheckInDate(), lease.getCheckOutDate())
+            );
+        }
+    }
+
+    @GetMapping
+    public List<Booking> getAll(@RequestParam(required = false) String buildingId) {
+        List<Booking> bookings = repo.findAllByOrderByCreatedAtDesc();
+        if (buildingId != null && !buildingId.isEmpty() && !"All".equalsIgnoreCase(buildingId)) {
+            List<String> roomIds = roomRepo.findByBuildingIdOrderByRoomNumberAsc(buildingId)
+                    .stream().map(com.victory.apartment.model.Room::getId).toList();
+            return bookings.stream().filter(b -> b.getRoomId() != null && roomIds.contains(b.getRoomId())).toList();
+        }
+        return bookings;
+    }
+
+    @GetMapping("/user/{email}")
+    public List<Booking> getByEmail(@PathVariable String email) {
+        return repo.findByGuestEmailIgnoreCaseOrderByCreatedAtDesc(email);
+    }
+
+    @GetMapping("/track")
+    public List<Booking> trackBookings(@RequestParam(value = "query", defaultValue = "") String query) {
+        String q = query.trim();
+        if (q.isEmpty()) return List.of();
+        return repo.findByBookingNoIgnoreCaseOrGuestPhoneOrGuestEmailIgnoreCaseOrderByCreatedAtDesc(q, q, q);
+    }
+
+    @PostMapping
+    public Booking create(@RequestBody Booking booking) {
+        if (booking.getId() == null || booking.getId().isEmpty()) {
+            booking.setId("bk-" + UUID.randomUUID().toString().substring(0, 8));
+            booking.setBookingNo(String.format("APT-%tY%tm-%04d", LocalDateTime.now(), LocalDateTime.now(), (int)(Math.random() * 9000 + 1000)));
+        }
+        if (booking.getCreatedAt() == null) booking.setCreatedAt(LocalDateTime.now());
+        if (booking.getStatus() == null) booking.setStatus("Pending");
+
+        // Set room number from room id
+        if (booking.getRoomId() != null && (booking.getRoomNumber() == null || booking.getRoomNumber().isEmpty())) {
+            roomRepo.findById(booking.getRoomId()).ifPresent(room -> {
+                booking.setRoomNumber(room.getRoomNumber());
+                if (booking.getTotalPrice() == null) booking.setTotalPrice(room.getPrice());
+            });
+        }
+
+        // Validate room status
+        if (booking.getRoomId() != null) {
+            roomRepo.findById(booking.getRoomId()).ifPresent(room -> {
+                if ("Occupied".equalsIgnoreCase(room.getStatus())) {
+                    throw new BookingConflictException(
+                        "ROOM_OCCUPIED",
+                        "ห้องพักนี้มีผู้เช่าพักอาศัยอยู่แล้ว กรุณาเลือกห้องว่างอื่น หากเป็นการจองของคุณให้ตรวจสถานะการจองเดิม"
+                    );
+                } else if ("Maintenance".equalsIgnoreCase(room.getStatus())) {
+                    throw new BookingConflictException(
+                        "ROOM_MAINTENANCE",
+                        "ห้องพักนี้อยู่ระหว่างปรับปรุงหรือซ่อมบำรุง กรุณาเลือกห้องว่างอื่นหรือติดต่อผู้ดูแล"
+                    );
+                }
+            });
+        }
+
+        // Prevent overlapping bookings only for already Approved requests
+        if (booking.getRoomId() != null) {
+            List<Booking> activeBookings = repo.findByRoomIdAndStatusIn(booking.getRoomId(), List.of("Approved"));
+            for (Booking existing : activeBookings) {
+                boolean overlaps = true;
+                if (booking.getCheckIn() != null && booking.getCheckOut() != null
+                        && existing.getCheckIn() != null && existing.getCheckOut() != null) {
+                    overlaps = booking.getCheckIn().compareTo(existing.getCheckOut()) < 0
+                            && booking.getCheckOut().compareTo(existing.getCheckIn()) > 0;
+                }
+                if (overlaps) {
+                    throw new BookingConflictException(
+                        "BOOKING_DATE_CONFLICT",
+                        "วันที่เลือกทับกับการจองที่อนุมัติแล้ว กรุณาเปลี่ยนช่วงวันที่หรือเลือกห้องว่างอื่น หากเป็นการจองของคุณให้ทำสัญญาจากการจองเดิม"
+                    );
+                }
+            }
+        }
+        ensureNoLeaseConflict(booking);
+
+        Booking saved = repo.save(booking);
+
+        // Auto-create notification for Admin with clean emoji prefix
+        AppNotification notif = new AppNotification();
+        notif.setId("notif-" + UUID.randomUUID().toString().substring(0, 8));
+        notif.setTitle("New Rental Application (Unit " + (saved.getRoomNumber() != null ? saved.getRoomNumber() : "") + ")");
+        // Keep contact details out of persistent notifications; authorized booking screens can load them when needed.
+        notif.setMessage(String.format("New rental application for Unit %s (Move-in: %s)",
+                saved.getRoomNumber(), saved.getCheckIn()));
+        notif.setType("info");
+        notif.setIsRead(false);
+        notif.setCreatedAt(LocalDateTime.now());
+        notifRepo.save(notif);
+
+        logService.log("Booking Request", String.format("New booking request for Unit %s", saved.getRoomNumber()));
+        return saved;
+    }
+
+    @PutMapping("/{id}/cancel")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<Booking> cancelBooking(@PathVariable String id) {
+        return repo.findByIdForUpdate(id).map(booking -> {
+            if (booking.getLeaseId() != null) {
+                throw new BookingConflictException(
+                        "BOOKING_HAS_LEASE", "This booking already has a lease. Manage it from Tenants.");
+            }
+            booking.setStatus("Cancelled");
+            if (booking.getRoomId() != null) {
+                roomRepo.findById(booking.getRoomId()).ifPresent(room -> {
+                    if ("Reserved".equals(room.getStatus())) {
+                        room.setStatus("Available");
+                        roomRepo.save(room);
+                    }
+                });
+            }
+            logService.log("Booking Cancelled", String.format("Booking %s cancelled", booking.getBookingNo()));
+            return ResponseEntity.ok(repo.save(booking));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{id}/status")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<Booking> updateStatus(@PathVariable String id, @RequestBody Map<String, String> req) {
+        return repo.findByIdForUpdate(id).map(booking -> {
+            String newStatus = req.get("status");
+            if (booking.getLeaseId() != null && !"Completed".equals(newStatus)) {
+                throw new BookingConflictException(
+                        "BOOKING_HAS_LEASE", "This booking already has a lease. Manage it from Tenants.");
+            }
+            if ("Approved".equals(newStatus)) ensureNoLeaseConflict(booking);
+            booking.setStatus(newStatus);
+
+            if ("Approved".equals(newStatus) && booking.getRoomId() != null) {
+                roomRepo.findById(booking.getRoomId()).ifPresent(room -> {
+                    room.setStatus("Reserved");
+                    roomRepo.save(room);
+                });
+            } else if ("Rejected".equals(newStatus) || "Cancelled".equals(newStatus)) {
+                roomRepo.findById(booking.getRoomId()).ifPresent(room -> {
+                    if ("Reserved".equals(room.getStatus())) {
+                        room.setStatus("Available");
+                        roomRepo.save(room);
+                    }
+                });
+            }
+
+            logService.log("Booking Status Updated", String.format("Booking %s set to %s", booking.getBookingNo(), newStatus));
+            return ResponseEntity.ok(repo.save(booking));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+}

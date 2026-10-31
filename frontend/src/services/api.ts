@@ -1,50 +1,11 @@
 import {
   Room, Tenant, Lease, UtilityBill, BillStatus, MaintenanceTask, SupplyItem,
-  MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building
+  MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication
 } from '../types';
+import { BookingLeaseError } from '../utils/bookingLeaseErrors';
+import { BookingRequestError } from '../utils/bookingErrors';
 
 const API_BASE = '/api';
-
-// Initial Mock Data for Local Fallback
-const MOCK_BUILDINGS: Building[] = [
-  {
-    id: 'bld-1',
-    name: 'อาคาร A (Victory Tower A)',
-    code: 'A',
-    floors: 2,
-    totalRooms: 24,
-    address: '123/1 ถนนสุขุมวิท กรุงเทพฯ',
-    coverImage: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
-    createdAt: '2026-01-01'
-  },
-  {
-    id: 'bld-2',
-    name: 'อาคาร B (Victory Residence B)',
-    code: 'B',
-    floors: 2,
-    totalRooms: 12,
-    address: '123/2 ถนนสุขุมวิท กรุงเทพฯ',
-    coverImage: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?auto=format&fit=crop&w=800&q=80',
-    createdAt: '2026-02-15'
-  }
-];
-
-function getStored<T>(key: string, defaultVal: T): T {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultVal;
-  } catch {
-    return defaultVal;
-  }
-}
-
-function setStored<T>(key: string, val: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(val));
-  } catch (e) {
-    console.error(e);
-  }
-}
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -65,59 +26,28 @@ export const getBuildings = async (): Promise<Building[]> => {
   try {
     return await fetchJson<Building[]>(`${API_BASE}/buildings`);
   } catch {
-    return getStored<Building[]>('apartment_buildings', MOCK_BUILDINGS);
+    return [];
   }
 };
 
 export const saveBuilding = async (buildingData: Partial<Building>): Promise<Building> => {
-  try {
-    if (buildingData.id) {
-      return await fetchJson<Building>(`${API_BASE}/buildings/${buildingData.id}`, {
-        method: 'PUT',
-        body: JSON.stringify(buildingData),
-      });
-    }
-    return await fetchJson<Building>(`${API_BASE}/buildings`, {
-      method: 'POST',
+  if (buildingData.id) {
+    return fetchJson<Building>(`${API_BASE}/buildings/${buildingData.id}`, {
+      method: 'PUT',
       body: JSON.stringify(buildingData),
     });
-  } catch {
-    const list = getStored<Building[]>('apartment_buildings', MOCK_BUILDINGS);
-    let updated: Building;
-    if (buildingData.id) {
-      const idx = list.findIndex(b => b.id === buildingData.id);
-      updated = { ...list[idx], ...buildingData } as Building;
-      if (idx !== -1) list[idx] = updated;
-    } else {
-      updated = {
-        id: `bld-${Date.now()}`,
-        name: buildingData.name || 'อาคารใหม่',
-        code: buildingData.code || 'C',
-        floors: buildingData.floors || 5,
-        totalRooms: buildingData.totalRooms || 20,
-        description: buildingData.description || '',
-        coverImage: buildingData.coverImage || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      list.push(updated);
-    }
-    setStored('apartment_buildings', list);
-    return updated;
   }
+  return fetchJson<Building>(`${API_BASE}/buildings`, {
+    method: 'POST',
+    body: JSON.stringify(buildingData),
+  });
 };
 
 export const deleteBuilding = async (id: string): Promise<void> => {
-  try {
-    const res = await fetch(`${API_BASE}/buildings/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to delete building on server');
-  } catch (err) {
-    console.warn('Backend delete failed, removing locally:', err);
-  } finally {
-    const list = getStored<Building[]>('apartment_buildings', MOCK_BUILDINGS);
-    const filtered = list.filter(b => b.id !== id);
-    setStored('apartment_buildings', filtered);
-  }
+  const res = await fetch(`${API_BASE}/buildings/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete building');
 };
+
 
 // ----------------------------------------------------
 // ROOMS / APARTMENT UNITS API
@@ -397,21 +327,63 @@ export const getUserBookings = async (email: string): Promise<Booking[]> => {
 };
 
 export const createBooking = async (bookingData: Partial<Booking>): Promise<Booking> => {
-  return fetchJson<Booking>(`${API_BASE}/bookings`, {
-    method: 'POST',
-    body: JSON.stringify(bookingData),
-  });
-};
-
-export const updateBookingStatus = async (bookingId: string, status: string): Promise<Booking | null> => {
+  let res: Response;
   try {
-    return await fetchJson<Booking>(`${API_BASE}/bookings/${bookingId}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status }),
+    res = await fetch(`${API_BASE}/bookings`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bookingData),
     });
   } catch {
-    return null;
+    throw new BookingRequestError('NETWORK_ERROR', 0);
   }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const code = body?.code || (res.status === 409 ? 'BOOKING_CONFLICT'
+      : res.status === 401 ? 'AUTH_REQUIRED' : res.status >= 500 ? 'SERVER_ERROR' : 'REQUEST_FAILED');
+    throw new BookingRequestError(code, res.status, body?.message || body?.error || res.statusText);
+  }
+  return res.json();
+};
+
+export const createBookingLease = async (bookingId: string, application: BookingLeaseApplication): Promise<Booking> => {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/bookings/${encodeURIComponent(bookingId)}/lease`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(application),
+    });
+  } catch {
+    throw new BookingLeaseError('NETWORK_ERROR', 0);
+  }
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    const statusCodes: Record<number, string> = {
+      400: 'INVALID_REQUEST', 401: 'AUTH_REQUIRED', 403: 'NOT_BOOKING_OWNER',
+      404: 'LEASE_API_UNAVAILABLE', 405: 'LEASE_API_UNAVAILABLE', 409: 'LEASE_CONFLICT', 422: 'VALIDATION_FAILED',
+    };
+    const code = error.code || (res.status >= 500 ? 'SERVER_ERROR'
+      : error.message && ![401, 403, 404, 405].includes(res.status) ? 'REQUEST_FAILED'
+      : statusCodes[res.status] || 'SERVER_ERROR');
+    throw new BookingLeaseError(code, res.status, error.message || '', error.fieldErrors || {});
+  }
+  try {
+    return await res.json();
+  } catch {
+    throw new BookingLeaseError('SERVER_ERROR', res.status);
+  }
+};
+
+export const logoutApiUser = async (): Promise<void> => {
+  const res = await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+  if (!res.ok) throw new Error('Unable to sign out');
+};
+
+export const updateBookingStatus = async (bookingId: string, status: string): Promise<Booking> => {
+  return fetchJson<Booking>(`${API_BASE}/bookings/${bookingId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status }),
+  });
 };
 
 export const cancelBooking = async (bookingId: string): Promise<Booking | null> => {
@@ -461,10 +433,7 @@ export const markNotificationAsRead = async (id: string): Promise<AppNotificatio
       method: 'PUT',
     });
   } catch (err) {
-    console.warn('Backend mark-read failed, updating locally:', err);
-    const list = getStored<AppNotification[]>('apartment_notifications', []);
-    const updated = list.map(n => n.id === id ? { ...n, isRead: true } : n);
-    setStored('apartment_notifications', updated);
+    console.warn('Backend mark-read failed:', err);
   }
 };
 
@@ -520,5 +489,20 @@ export const updateUserProfile = async (fullname: string, email: string, phone?:
     });
   } catch (err: any) {
     return { success: false, error: err.message || 'Failed to update profile' };
+  }
+};
+
+export const changePasswordApi = async (
+  email: string,
+  oldPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; message?: string; lastPasswordChange?: string; error?: string }> => {
+  try {
+    return await fetchJson(`${API_BASE}/auth/change-password`, {
+      method: 'POST',
+      body: JSON.stringify({ email, oldPassword, newPassword }),
+    });
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to change password' };
   }
 };
