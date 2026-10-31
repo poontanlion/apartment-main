@@ -31,6 +31,7 @@ public class UtilityBill {
     private Double totalAmount;
     private String status; // Pending, Paid
     private String paymentDate;
+    @Column(columnDefinition = "text")
     private String slipImage;
     private LocalDateTime createdAt;
 

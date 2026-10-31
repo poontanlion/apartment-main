@@ -20,9 +20,9 @@ FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
-# Create a non-root user for security and prepare writable directories
+# Create a non-root user for security
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser \
-    && mkdir -p /app/data && chown -R appuser:appgroup /app
+    && chown -R appuser:appgroup /app
 USER appuser
 
 # Copy only the built jar from the builder stage

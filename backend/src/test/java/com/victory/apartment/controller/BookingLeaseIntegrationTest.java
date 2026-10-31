@@ -1,5 +1,7 @@
 package com.victory.apartment.controller;
 
+import com.victory.apartment.TestcontainersConfiguration;
+import org.springframework.context.annotation.Import;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.victory.apartment.model.Booking;
 import com.victory.apartment.model.Lease;
@@ -27,11 +29,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:booking-lease-test;DB_CLOSE_DELAY=-1",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
-})
+@SpringBootTest
 @AutoConfigureMockMvc
+@Import(TestcontainersConfiguration.class)
 class BookingLeaseIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;

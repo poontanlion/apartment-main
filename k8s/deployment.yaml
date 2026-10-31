@@ -26,6 +26,8 @@ spec:
         envFrom:
         - configMapRef:
             name: apartment-backend-config
+        - secretRef:
+            name: apartment-db-secret
         livenessProbe:
           httpGet:
             path: /actuator/health/liveness

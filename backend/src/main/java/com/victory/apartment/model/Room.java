@@ -18,14 +18,18 @@ public class Room {
 
     private String roomName;
     private String roomType;
+    @Column(columnDefinition = "text")
     private String description;
     private Integer capacity;
     private Double price;
     private String status; // Available, Reserved, Occupied, Maintenance
+    @Column(columnDefinition = "text")
     private String amenities; // JSON string
     private Double sizeSqm;
     private String bedType;
+    @Column(columnDefinition = "text")
     private String coverImage;
+    @Column(columnDefinition = "text")
     private String gallery; // JSON string
 
     private String currentTenantId;

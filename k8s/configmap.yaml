@@ -5,5 +5,4 @@ metadata:
 data:
   SPRING_PROFILES_ACTIVE: "prod"
   SERVER_PORT: "8080"
-  SPRING_H2_CONSOLE_ENABLED: "false"
-  SPRING_DATASOURCE_URL: "jdbc:h2:file:/tmp/apartmentdb;DB_CLOSE_ON_EXIT=FALSE;AUTO_RECONNECT=TRUE"
+  DB_URL: "jdbc:postgresql://postgres:5432/apartmentdb"

@@ -27,6 +27,7 @@ public class Booking {
     private String checkOut;
     private Integer guestCount;
     private Double totalPrice;
+    @Column(columnDefinition = "text")
     private String specialRequests;
     private String status; // Pending, Approved, Rejected, Cancelled
     private String tenantId;
