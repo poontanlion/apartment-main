@@ -124,6 +124,7 @@ public class MaintenanceController {
             if (incoming.getSuppliesUsed() != null) existing.setSuppliesUsed(incoming.getSuppliesUsed());
             if (incoming.getOccupancyType() != null) existing.setOccupancyType(incoming.getOccupancyType());
             if (incoming.getArchived() != null) existing.setArchived(incoming.getArchived());
+            if (incoming.getScannedDocument() != null) existing.setScannedDocument(incoming.getScannedDocument());
 
             if ("Completed".equals(existing.getStatus()) && existing.getCompletedAt() == null) {
                 existing.setCompletedAt(LocalDateTime.now());
@@ -169,6 +170,7 @@ public class MaintenanceController {
         log.setSuppliesSummary(task.getSuppliesUsed() != null && !task.getSuppliesUsed().isEmpty() ? task.getSuppliesUsed() : "ไม่มีอะไหล่ (ค่าแรงอย่างเดียว)");
         log.setTotalCost(task.getTotalCost() != null ? task.getTotalCost() : (task.getLaborCost() != null ? task.getLaborCost() : 0.0));
         log.setPerformedBy(task.getAssignedWorker() != null && !task.getAssignedWorker().isEmpty() ? task.getAssignedWorker() : "ช่างประจำอาคาร");
+        if (task.getScannedDocument() != null) log.setScannedDocument(task.getScannedDocument());
         logRepo.save(log);
     }
 
@@ -386,6 +388,7 @@ public class MaintenanceController {
             if (incoming.getSuppliesSummary() != null) existing.setSuppliesSummary(incoming.getSuppliesSummary());
             if (incoming.getTotalCost() != null) existing.setTotalCost(incoming.getTotalCost());
             if (incoming.getPerformedBy() != null) existing.setPerformedBy(incoming.getPerformedBy());
+            if (incoming.getScannedDocument() != null) existing.setScannedDocument(incoming.getScannedDocument());
             MaintenanceLog saved = logRepo.save(existing);
             recalculateAndDeductSuppliesStock();
             return ResponseEntity.ok(saved);

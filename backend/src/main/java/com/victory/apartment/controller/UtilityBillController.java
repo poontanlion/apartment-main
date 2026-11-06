@@ -128,6 +128,9 @@ public class UtilityBillController {
             if (req.containsKey("slipImage")) {
                 bill.setSlipImage(req.get("slipImage"));
             }
+            if (req.containsKey("scannedDocument")) {
+                bill.setScannedDocument(req.get("scannedDocument"));
+            }
             logService.log("Bill Status Updated", String.format("Bill %s set to %s", bill.getInvoiceNo(), req.get("status")));
             return ResponseEntity.ok(repo.save(bill));
         }).orElse(ResponseEntity.notFound().build());

@@ -33,6 +33,8 @@ public class UtilityBill {
     private String paymentDate;
     @Column(columnDefinition = "text")
     private String slipImage;
+    @Column(columnDefinition = "text")
+    private String scannedDocument;
     private LocalDateTime createdAt;
 
     public UtilityBill() {}
@@ -79,6 +81,8 @@ public class UtilityBill {
     public void setPaymentDate(String paymentDate) { this.paymentDate = paymentDate; }
     public String getSlipImage() { return slipImage; }
     public void setSlipImage(String slipImage) { this.slipImage = slipImage; }
+    public String getScannedDocument() { return scannedDocument != null ? scannedDocument : slipImage; }
+    public void setScannedDocument(String scannedDocument) { this.scannedDocument = scannedDocument; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

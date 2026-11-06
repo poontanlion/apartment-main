@@ -21,6 +21,8 @@ public class MaintenanceLog {
     private String suppliesSummary;
     private Double totalCost;
     private String performedBy;
+    @Column(columnDefinition = "text")
+    private String scannedDocument;
 
     public MaintenanceLog() {}
 
@@ -44,5 +46,8 @@ public class MaintenanceLog {
     public void setTotalCost(Double totalCost) { this.totalCost = totalCost; }
     public String getPerformedBy() { return performedBy; }
     public void setPerformedBy(String performedBy) { this.performedBy = performedBy; }
+
+    public String getScannedDocument() { return scannedDocument; }
+    public void setScannedDocument(String scannedDocument) { this.scannedDocument = scannedDocument; }
 }
 
