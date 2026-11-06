@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UtilityBill, Room, Lease } from '../../types';
-import { getUtilityBills, saveUtilityBill, updateBillStatus, getRooms, getLeases } from '../../services/api';
+import { UtilityBill, Room, Lease, RentQuote } from '../../types';
+import { getUtilityBills, saveUtilityBill, updateBillStatus, getRooms, getLeases, getRentQuote } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
+import { currentBillingMonth, recentBillingMonths } from '../../utils/billingMonth';
 import { FileText, Plus, Printer, Droplets, Zap, Search, Building2 } from 'lucide-react';
 import { ReceiptModal } from '../../components/admin/ReceiptModal';
 import { useLanguage } from '../../context/LanguageContext';
@@ -42,7 +43,7 @@ export const UtilityReceiptManagement: React.FC = () => {
   const [selectedBillForReceipt, setSelectedBillForReceipt] = useState<UtilityBill | null>(null);
 
   const [billFormData, setBillFormData] = useState<Partial<UtilityBill>>({
-    billingMonth: 'August 2026',
+    billingMonth: currentBillingMonth(),
     waterRate: 9,
     electricRate: 4,
     commonFee: 300,
@@ -51,9 +52,10 @@ export const UtilityReceiptManagement: React.FC = () => {
     prevElectricMeter: 0,
     currElectricMeter: 0,
   });
+  const [rentQuote, setRentQuote] = useState<RentQuote | null>(null);
+  const [rentQuoteError, setRentQuoteError] = useState('');
 
-  const currentMonthPart = (billFormData.billingMonth || 'August 2026').split(' ')[0] || 'August';
-  const currentYearPart = (billFormData.billingMonth || 'August 2026').split(' ')[1] || '2026';
+  const [currentMonthPart, currentYearPart] = (billFormData.billingMonth || currentBillingMonth()).split(' ');
 
   const handleMonthChange = (newMonth: string) => {
     setBillFormData(prev => ({
@@ -83,17 +85,38 @@ export const UtilityReceiptManagement: React.FC = () => {
     fetchData();
   }, []);
 
+  // The server decides the rent, so the form shows its answer for this room and month.
+  useEffect(() => {
+    if (!showBillModal || !billFormData.roomId || !billFormData.billingMonth) return;
+    let stale = false;
+    setRentQuote(null);
+    setRentQuoteError('');
+    getRentQuote(billFormData.roomId, billFormData.billingMonth)
+      .then(quote => {
+        if (stale) return;
+        setRentQuote(quote);
+        // Name the tenant of the lease being billed, which may have ended, not whoever was shown last.
+        const lease = leases.find(l => l.id === quote.leaseId);
+        const room = rooms.find(r => r.id === billFormData.roomId);
+        setBillFormData(prev => ({ ...prev, tenantName: lease?.tenantName || room?.currentTenantName || 'Tenant' }));
+      })
+      .catch((err: Error) => {
+        if (!stale) setRentQuoteError(err.message);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [showBillModal, billFormData.roomId, billFormData.billingMonth]);
+
   const handleOpenNewBillModal = () => {
     const activeLease = leases.find(l => l.status === 'Active');
     const targetRoom = rooms.find(r => r.id === activeLease?.roomId) || rooms[0];
 
     setBillFormData({
-      billingMonth: 'August 2026',
-      leaseId: activeLease?.id || '',
+      billingMonth: currentBillingMonth(),
       roomId: targetRoom?.id || '',
       roomNumber: targetRoom?.roomNumber || '',
       tenantName: activeLease?.tenantName || targetRoom?.currentTenantName || 'Tenant',
-      rentAmount: activeLease?.rentAmount || targetRoom?.price || 5500,
       prevWaterMeter: targetRoom?.currWaterMeter || targetRoom?.prevWaterMeter || 100,
       currWaterMeter: (targetRoom?.currWaterMeter || targetRoom?.prevWaterMeter || 100) + 8,
       prevElectricMeter: targetRoom?.currElectricMeter || targetRoom?.prevElectricMeter || 400,
@@ -115,7 +138,6 @@ export const UtilityReceiptManagement: React.FC = () => {
         roomId: rm.id,
         roomNumber: rm.roomNumber,
         tenantName: lease?.tenantName || rm.currentTenantName || 'Tenant',
-        rentAmount: lease?.rentAmount || rm.price || 5500,
         prevWaterMeter: rm.currWaterMeter || rm.prevWaterMeter || 100,
         currWaterMeter: (rm.currWaterMeter || rm.prevWaterMeter || 100) + 8,
         prevElectricMeter: rm.currElectricMeter || rm.prevElectricMeter || 400,
@@ -126,10 +148,15 @@ export const UtilityReceiptManagement: React.FC = () => {
 
   const handleSaveBill = async (e: React.FormEvent) => {
     e.preventDefault();
-    await saveUtilityBill(billFormData);
-    toast.success('Utility bill calculated and saved successfully');
-    setShowBillModal(false);
-    fetchData();
+    if (!rentQuote) return;
+    try {
+      await saveUtilityBill(billFormData);
+      toast.success('Utility bill calculated and saved successfully');
+      setShowBillModal(false);
+      fetchData();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   };
 
   const handleToggleStatus = async (billId: string, currentStatus: UtilityBill['status']) => {
@@ -143,9 +170,9 @@ export const UtilityReceiptManagement: React.FC = () => {
   const electricUnitsPreview = Math.max(0, (billFormData.currElectricMeter || 0) - (billFormData.prevElectricMeter || 0));
   const waterAmtPreview = waterUnitsPreview * (billFormData.waterRate || 9);
   const electricAmtPreview = electricUnitsPreview * (billFormData.electricRate || 4);
-  const totalAmtPreview = (billFormData.rentAmount || 0) + waterAmtPreview + electricAmtPreview + (billFormData.commonFee || 0);
+  const totalAmtPreview = (rentQuote?.rentAmount || 0) + waterAmtPreview + electricAmtPreview + (billFormData.commonFee || 0);
 
-  const availableMonths = Array.from(new Set(['August 2026', 'July 2026', 'June 2026', ...bills.map(b => b.billingMonth)])).filter((m): m is string => Boolean(m));
+  const availableMonths = Array.from(new Set([...recentBillingMonths(3), ...bills.map(b => b.billingMonth)])).filter((m): m is string => Boolean(m));
 
   const filteredBills = bills.filter(b => {
     const matchesSearch = (b.roomNumber || '').includes(search) || (b.tenantName || '').toLowerCase().includes(search.toLowerCase()) || (b.invoiceNo || '').includes(search);
@@ -534,9 +561,21 @@ export const UtilityReceiptManagement: React.FC = () => {
               {/* TOTAL CALCULATION PREVIEW */}
               <div className="p-4 bg-nike-soft-cloud dark:bg-nike-dark-surface rounded-xl border border-nike-hairline dark:border-nike-dark-card space-y-1 text-xs">
                 <div className="flex justify-between text-nike-mute">
-                  <span>{language === 'th' ? 'ค่าเช่าห้อง:' : 'Room Rent:'}</span>
-                  <span className="font-semibold text-nike-ink dark:text-white">{formatCurrency(billFormData.rentAmount || 0)}</span>
+                  <span>
+                    {language === 'th' ? 'ค่าเช่าห้อง' : 'Room Rent'}
+                    {rentQuote && (rentQuote.source === 'LEASE'
+                      ? (language === 'th' ? ' (ตามสัญญา)' : ' (per lease)')
+                      : (language === 'th' ? ' (ราคาห้อง)' : ' (room price)'))}:
+                  </span>
+                  <span className="font-semibold text-nike-ink dark:text-white">
+                    {rentQuote ? formatCurrency(rentQuote.rentAmount) : '-'}
+                  </span>
                 </div>
+                {rentQuoteError && (
+                  <p role="alert" className="text-red-600 font-medium">
+                    {language === 'th' ? `หาค่าเช่าไม่ได้: ${rentQuoteError}` : `Could not get the rent: ${rentQuoteError}`}
+                  </p>
+                )}
                 <div className="flex justify-between text-nike-mute">
                   <span>{language === 'th' ? `ค่าน้ำประปา (${waterUnitsPreview} หน่วย @ ${billFormData.waterRate ?? 9}):` : `Water (${waterUnitsPreview} units @ ${billFormData.waterRate ?? 9}):`}</span>
                   <span className="font-semibold text-blue-600">{formatCurrency(waterAmtPreview)}</span>
@@ -567,7 +606,8 @@ export const UtilityReceiptManagement: React.FC = () => {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-xs font-semibold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer shadow-xs"
+                disabled={!rentQuote}
+                className="px-4 py-2 text-xs font-semibold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {language === 'th' ? 'บันทึกและสร้างบิล' : 'Save & Generate Bill'}
               </button>

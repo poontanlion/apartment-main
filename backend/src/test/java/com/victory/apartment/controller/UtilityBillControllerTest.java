@@ -255,10 +255,7 @@ public class UtilityBillControllerTest {
 
     @Test
     void updateBill_legacyNullRentKeepsStoredTotal() throws Exception {
-        mockBill.setRentAmount(null);
-        mockBill.setTotalAmount(6192.0);
-        Mockito.when(utilityBillRepository.findById("bill-123")).thenReturn(Optional.of(mockBill));
-        saveReturnsArgument();
+        legacyBillWithRentInsideTotal();
         UtilityBill incoming = billWithUsage();
         incoming.setTotalAmount(1.0);
 
@@ -266,7 +263,34 @@ public class UtilityBillControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(incoming)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rentAmount").value(5500.0))
                 .andExpect(jsonPath("$.totalAmount").value(6192.0));
+    }
+
+    @Test
+    void updateBill_legacyMeterCorrectionKeepsLinesAddingUp() throws Exception {
+        legacyBillWithRentInsideTotal();
+        UtilityBill incoming = billWithUsage();
+        incoming.setCurrWaterMeter(104.0);
+
+        mockMvc.perform(put("/api/utility-bills/bill-123")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(incoming)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.waterAmount").value(36.0))
+                .andExpect(jsonPath("$.rentAmount").value(5500.0))
+                .andExpect(jsonPath("$.totalAmount").value(6156.0));
+    }
+
+    /** Before this feature a bill without rent charged 5,500 in its total but stored no rent: 5500 + 72 + 320 + 300. */
+    private void legacyBillWithRentInsideTotal() {
+        mockBill.setRentAmount(null);
+        mockBill.setWaterAmount(72.0);
+        mockBill.setElectricAmount(320.0);
+        mockBill.setCommonFee(300.0);
+        mockBill.setTotalAmount(6192.0);
+        Mockito.when(utilityBillRepository.findById("bill-123")).thenReturn(Optional.of(mockBill));
+        saveReturnsArgument();
     }
 
     @Test

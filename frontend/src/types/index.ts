@@ -90,6 +90,25 @@ export interface Lease {
   status: LeaseStatus;
   notes?: string;
   createdAt: string;
+  terminatedDate?: string;
+}
+
+export interface RoomPrice {
+  id: string | null;
+  roomId: string;
+  price: number;
+  effectiveMonth: string;
+}
+
+export interface RoomPriceHistory {
+  currentMonth: string;
+  prices: RoomPrice[];
+}
+
+export interface RentQuote {
+  rentAmount: number;
+  source: 'LEASE' | 'ROOM_PRICE';
+  leaseId: string | null;
 }
 
 export type BillStatus = 'Pending' | 'Paid';

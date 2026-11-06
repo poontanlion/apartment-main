@@ -84,12 +84,19 @@ public class UtilityBillController {
             // An issued bill keeps its month and rent, whatever the room's price has become since.
             bill.setId(id);
             bill.setBillingMonth(stored.getBillingMonth());
-            bill.setRentAmount(stored.getRentAmount());
+            bill.setRentAmount(stored.getRentAmount() != null ? stored.getRentAmount() : rentInsideTotal(stored));
             calculateAmounts(bill);
-            // Older bills have no rent stored, but their total already includes the rent charged then.
-            if (stored.getRentAmount() == null) bill.setTotalAmount(stored.getTotalAmount());
             return ResponseEntity.ok(repo.save(bill));
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    /** Older bills stored no rent, but their total already includes the rent charged then. */
+    private double rentInsideTotal(UtilityBill bill) {
+        double total = bill.getTotalAmount() != null ? bill.getTotalAmount() : 0;
+        double water = bill.getWaterAmount() != null ? bill.getWaterAmount() : 0;
+        double electric = bill.getElectricAmount() != null ? bill.getElectricAmount() : 0;
+        double commonFee = bill.getCommonFee() != null ? bill.getCommonFee() : 300;
+        return Math.max(0, total - water - electric - commonFee);
     }
 
     @GetMapping("/rent-quote")

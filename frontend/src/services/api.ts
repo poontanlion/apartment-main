@@ -1,6 +1,7 @@
 import {
   Room, Tenant, Lease, UtilityBill, BillStatus, MaintenanceTask, SupplyItem,
-  MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication
+  MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication,
+  RoomPrice, RoomPriceHistory, RentQuote
 } from '../types';
 import { BookingLeaseError } from '../utils/bookingLeaseErrors';
 import { BookingRequestError } from '../utils/bookingErrors';
@@ -67,6 +68,37 @@ export const getRoomById = async (id: string): Promise<Room | null> => {
     return null;
   }
 };
+
+export const getRoomPrices = (roomId: string): Promise<RoomPriceHistory> =>
+  fetchJson<RoomPriceHistory>(`${API_BASE}/rooms/${roomId}/prices`);
+
+export const addRoomPrice = (roomId: string, price: number, effectiveMonth: string): Promise<RoomPrice> =>
+  fetchJson<RoomPrice>(`${API_BASE}/rooms/${roomId}/prices`, {
+    method: 'POST',
+    body: JSON.stringify({ price, effectiveMonth }),
+  });
+
+export const deleteRoomPrice = async (roomId: string, priceId: string): Promise<void> => {
+  const res = await fetch(`${API_BASE}/rooms/${roomId}/prices/${priceId}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(error.message || res.statusText);
+  }
+};
+
+/** The room's price for a month given as YYYY-MM. */
+export const getRoomPriceForMonth = async (roomId: string, month: string): Promise<number> => {
+  const result = await fetchJson<{ month: string; price: number }>(
+    `${API_BASE}/rooms/${roomId}/price?month=${encodeURIComponent(month)}`,
+  );
+  return result.price;
+};
+
+/** The rent a bill would get. billingMonth looks like "August 2026". */
+export const getRentQuote = (roomId: string, billingMonth: string): Promise<RentQuote> =>
+  fetchJson<RentQuote>(
+    `${API_BASE}/utility-bills/rent-quote?roomId=${encodeURIComponent(roomId)}&month=${encodeURIComponent(billingMonth)}`,
+  );
 
 export const saveRoom = async (roomData: Partial<Room>): Promise<Room> => {
   if (roomData.id) {
