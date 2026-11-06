@@ -5,6 +5,10 @@ import com.victory.apartment.model.Room;
 import com.victory.apartment.repository.UtilityBillRepository;
 import com.victory.apartment.repository.RoomRepository;
 import com.victory.apartment.service.ActivityLogService;
+import com.victory.apartment.service.PriceRuleException;
+import com.victory.apartment.service.RentQuoteService;
+import com.victory.apartment.service.RentQuoteService.RentQuote;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,11 +24,14 @@ public class UtilityBillController {
     private final UtilityBillRepository repo;
     private final RoomRepository roomRepo;
     private final ActivityLogService logService;
+    private final RentQuoteService rentQuotes;
 
-    public UtilityBillController(UtilityBillRepository repo, RoomRepository roomRepo, ActivityLogService logService) {
+    public UtilityBillController(UtilityBillRepository repo, RoomRepository roomRepo, ActivityLogService logService,
+                                 RentQuoteService rentQuotes) {
         this.repo = repo;
         this.roomRepo = roomRepo;
         this.logService = logService;
+        this.rentQuotes = rentQuotes;
     }
 
     @GetMapping
@@ -42,21 +49,16 @@ public class UtilityBillController {
     public UtilityBill create(@RequestBody UtilityBill bill) {
         if (bill.getId() == null || bill.getId().isEmpty()) {
             bill.setId("bill-" + UUID.randomUUID().toString().substring(0, 8));
+        } else if (repo.existsById(bill.getId())) {
+            // Saving here would replace an issued bill.
+            throw new PriceRuleException(HttpStatus.CONFLICT, "BILL_ALREADY_EXISTS", "A bill with this id already exists.");
         }
         if (bill.getCreatedAt() == null) bill.setCreatedAt(LocalDateTime.now());
 
-        // Auto-calculate amounts
-        double waterUnits = Math.max(0, (bill.getCurrWaterMeter() != null ? bill.getCurrWaterMeter() : 0) - (bill.getPrevWaterMeter() != null ? bill.getPrevWaterMeter() : 0));
-        double electricUnits = Math.max(0, (bill.getCurrElectricMeter() != null ? bill.getCurrElectricMeter() : 0) - (bill.getPrevElectricMeter() != null ? bill.getPrevElectricMeter() : 0));
-        double waterRate = bill.getWaterRate() != null ? bill.getWaterRate() : 9.0;
-        double electricRate = bill.getElectricRate() != null ? bill.getElectricRate() : 4.0;
-
-        bill.setWaterAmount(waterUnits * waterRate);
-        bill.setElectricAmount(electricUnits * electricRate);
-
-        double rent = bill.getRentAmount() != null ? bill.getRentAmount() : 5500;
-        double commonFee = bill.getCommonFee() != null ? bill.getCommonFee() : 300;
-        bill.setTotalAmount(rent + bill.getWaterAmount() + bill.getElectricAmount() + commonFee);
+        RentQuote quote = rentQuotes.quote(bill.getRoomId(), RentQuoteService.parseBillingMonth(bill.getBillingMonth()));
+        bill.setRentAmount(quote.rentAmount());
+        bill.setLeaseId(quote.leaseId());
+        calculateAmounts(bill);
 
         if (bill.getStatus() == null) bill.setStatus("Pending");
 
@@ -78,9 +80,35 @@ public class UtilityBillController {
 
     @PutMapping("/{id}")
     public ResponseEntity<UtilityBill> update(@PathVariable String id, @RequestBody UtilityBill bill) {
-        if (!repo.existsById(id)) return ResponseEntity.notFound().build();
-        bill.setId(id);
-        return ResponseEntity.ok(repo.save(bill));
+        return repo.findById(id).map(stored -> {
+            // An issued bill keeps its month and rent, whatever the room's price has become since.
+            bill.setId(id);
+            bill.setBillingMonth(stored.getBillingMonth());
+            bill.setRentAmount(stored.getRentAmount());
+            calculateAmounts(bill);
+            // Older bills have no rent stored, but their total already includes the rent charged then.
+            if (stored.getRentAmount() == null) bill.setTotalAmount(stored.getTotalAmount());
+            return ResponseEntity.ok(repo.save(bill));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/rent-quote")
+    public RentQuote rentQuote(@RequestParam String roomId, @RequestParam String month) {
+        return rentQuotes.quote(roomId, RentQuoteService.parseBillingMonth(month));
+    }
+
+    private void calculateAmounts(UtilityBill bill) {
+        double waterUnits = Math.max(0, (bill.getCurrWaterMeter() != null ? bill.getCurrWaterMeter() : 0) - (bill.getPrevWaterMeter() != null ? bill.getPrevWaterMeter() : 0));
+        double electricUnits = Math.max(0, (bill.getCurrElectricMeter() != null ? bill.getCurrElectricMeter() : 0) - (bill.getPrevElectricMeter() != null ? bill.getPrevElectricMeter() : 0));
+        double waterRate = bill.getWaterRate() != null ? bill.getWaterRate() : 9.0;
+        double electricRate = bill.getElectricRate() != null ? bill.getElectricRate() : 4.0;
+
+        bill.setWaterAmount(waterUnits * waterRate);
+        bill.setElectricAmount(electricUnits * electricRate);
+
+        double rent = bill.getRentAmount() != null ? bill.getRentAmount() : 0;
+        double commonFee = bill.getCommonFee() != null ? bill.getCommonFee() : 300;
+        bill.setTotalAmount(rent + bill.getWaterAmount() + bill.getElectricAmount() + commonFee);
     }
 
     @PutMapping("/{id}/status")
