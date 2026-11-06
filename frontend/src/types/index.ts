@@ -89,6 +89,7 @@ export interface Lease {
   depositAmount: number;
   status: LeaseStatus;
   notes?: string;
+  scannedDocument?: string;
   createdAt: string;
 }
 
@@ -117,6 +118,7 @@ export interface UtilityBill {
   status: BillStatus;
   paymentDate?: string;
   slipImage?: string;
+  scannedDocument?: string;
   createdAt: string;
 }
 
@@ -164,6 +166,7 @@ export interface MaintenanceTask {
   laborCost: number;
   totalCost: number;
   recurringReminder: ReminderFrequency;
+  scannedDocument?: string;
   createdAt: string;
   completedAt?: string;
 }
@@ -179,6 +182,7 @@ export interface MaintenanceLog {
   suppliesSummary: string;
   totalCost: number;
   performedBy: string;
+  scannedDocument?: string;
 }
 
 export interface ScheduledReminder {

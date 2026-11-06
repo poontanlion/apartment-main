@@ -37,6 +37,8 @@ public class Lease {
     private String status; // Active, Terminated, Expired
     @Column(columnDefinition = "text")
     private String notes;
+    @Column(columnDefinition = "text")
+    private String scannedDocument;
     private LocalDateTime createdAt;
 
     public Lease() {}
@@ -79,6 +81,9 @@ public class Lease {
 
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
+    public String getScannedDocument() { return scannedDocument; }
+    public void setScannedDocument(String scannedDocument) { this.scannedDocument = scannedDocument; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

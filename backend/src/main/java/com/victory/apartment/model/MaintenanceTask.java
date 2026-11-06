@@ -41,6 +41,8 @@ public class MaintenanceTask {
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
     private Boolean archived; // true = archived to per-unit maintenance logs (hidden from main list)
+    @Column(columnDefinition = "text")
+    private String scannedDocument;
 
     public MaintenanceTask() {}
 
@@ -90,5 +92,7 @@ public class MaintenanceTask {
     public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
     public Boolean getArchived() { return archived; }
     public void setArchived(Boolean archived) { this.archived = archived; }
+    public String getScannedDocument() { return scannedDocument; }
+    public void setScannedDocument(String scannedDocument) { this.scannedDocument = scannedDocument; }
 }
 

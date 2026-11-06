@@ -179,11 +179,11 @@ export const saveUtilityBill = async (billData: Partial<UtilityBill>): Promise<U
   });
 };
 
-export const updateBillStatus = async (billId: string, status: BillStatus, slipImage?: string): Promise<UtilityBill | null> => {
+export const updateBillStatus = async (billId: string, status: BillStatus, slipImage?: string, scannedDocument?: string): Promise<UtilityBill | null> => {
   try {
     return await fetchJson<UtilityBill>(`${API_BASE}/utility-bills/${billId}/status`, {
       method: 'PUT',
-      body: JSON.stringify({ status, slipImage }),
+      body: JSON.stringify({ status, slipImage, scannedDocument }),
     });
   } catch {
     return null;
