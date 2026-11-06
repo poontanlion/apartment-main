@@ -219,7 +219,7 @@ export const MyApartmentPage: React.FC = () => {
           <div className="bg-nike-soft-cloud dark:bg-nike-dark-surface p-4 rounded-2xl border border-nike-hairline dark:border-nike-dark-card text-left md:text-right shrink-0 w-full md:w-auto">
             <span className="text-xs text-nike-mute dark:text-nike-stone font-medium block">{t('roomMgmt.rent')}</span>
             <span className="text-2xl font-bold text-blue-600 dark:text-blue-400 block mt-0.5">
-              {formatCurrency(matchedRoom?.price || activeBooking.totalPrice || 6500)}
+              {formatCurrency(activeBooking.totalPrice ?? matchedRoom?.price ?? 0)}
             </span>
             <span className="text-[11px] text-nike-stone font-medium block mt-0.5">/{t('common.month')}</span>
           </div>

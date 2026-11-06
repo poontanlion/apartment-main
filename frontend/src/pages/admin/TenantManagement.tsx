@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Tenant, Lease, Room } from '../../types';
-import { getTenants, saveTenant, deleteTenant, getLeases, saveLease, terminateLease, getRooms } from '../../services/api';
+import { getTenants, saveTenant, deleteTenant, getLeases, saveLease, terminateLease, getRooms, getRoomPriceForMonth } from '../../services/api';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { Users, UserPlus, FileSignature, Phone, Mail, CheckCircle2, Printer, Plus, Trash2, Edit3, Home, Search } from 'lucide-react';
 import { ContractModal } from '../../components/admin/ContractModal';
@@ -91,6 +91,20 @@ export const TenantManagement: React.FC = () => {
         roomNumber: rm.roomNumber,
         rentAmount: rm.price,
       }));
+      suggestRent(rm.id, leaseFormData.checkInDate);
+    }
+  };
+
+  // Only changing the room or date calls this, so a rent the admin typed otherwise stays.
+  const suggestRent = async (roomId?: string, checkInDate?: string) => {
+    if (!roomId || !checkInDate) return;
+    try {
+      const price = await getRoomPriceForMonth(roomId, checkInDate.slice(0, 7));
+      setLeaseFormData(prev =>
+        prev.roomId === roomId && prev.checkInDate === checkInDate ? { ...prev, rentAmount: price } : prev
+      );
+    } catch {
+      // Keep the current suggestion; the admin can still type the rent.
     }
   };
 
@@ -474,7 +488,10 @@ export const TenantManagement: React.FC = () => {
                     type="date"
                     required
                     value={leaseFormData.checkInDate || ''}
-                    onChange={(e) => setLeaseFormData({ ...leaseFormData, checkInDate: e.target.value })}
+                    onChange={(e) => {
+                      setLeaseFormData({ ...leaseFormData, checkInDate: e.target.value });
+                      suggestRent(leaseFormData.roomId, e.target.value);
+                    }}
                     className="w-full p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-400 focus:outline-none focus:border-blue-500 transition-all"
                   />
                 </div>

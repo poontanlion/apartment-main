@@ -3,12 +3,15 @@ import { X } from 'lucide-react';
 import { Room, RoomType, RoomStatus, Building } from '../../types';
 import { getBuildings } from '../../services/api';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatCurrency } from '../../utils/formatters';
+import { RoomPricePanel } from './RoomPricePanel';
 
 interface RoomModalProps {
   room?: Room | null;
   isOpen: boolean;
   onClose: () => void;
   onSave: (roomData: Partial<Room>) => void;
+  onPriceChanged?: () => void;
   defaultBuildingId?: string;
 }
 
@@ -17,7 +20,7 @@ const ALL_AMENITIES = [
   'Keycard Access', 'Refrigerator', 'Parking', 'CCTV'
 ];
 
-export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onSave, defaultBuildingId }) => {
+export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onSave, onPriceChanged, defaultBuildingId }) => {
   const { t, language } = useLanguage();
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string>(room?.buildingId || defaultBuildingId || '');
@@ -78,7 +81,8 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
       roomType,
       buildingId: selectedBuildingId,
       buildingName: bld?.name || bld?.code || 'A',
-      price: Number(price),
+      // An existing room's price only changes through its price history.
+      ...(room ? {} : { price: Number(price) }),
       capacity: Number(capacity),
       sizeSqm: Number(sizeSqm),
       bedType,
@@ -180,10 +184,14 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block font-medium mb-1.5 text-nike-ink dark:text-white">
+              <label htmlFor="room-rent" className="block font-medium mb-1.5 text-nike-ink dark:text-white">
                 {language === 'th' ? 'ค่าเช่ารายเดือน (บาท)' : 'Monthly Rent (THB)'}
               </label>
-              <input type="number" required min="0" value={price} onChange={e => setPrice(Number(e.target.value))} className={inputClass} />
+              {room ? (
+                <input id="room-rent" type="text" readOnly value={formatCurrency(price)} className={inputClass + " cursor-not-allowed font-semibold"} />
+              ) : (
+                <input id="room-rent" type="number" required min="1" value={price} onChange={e => setPrice(Number(e.target.value))} className={inputClass} />
+              )}
             </div>
             <div>
               <label className="block font-medium mb-1.5 text-nike-ink dark:text-white">
@@ -244,6 +252,16 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
           </div>
 
         </form>
+
+        {room && (
+          <RoomPricePanel
+            room={room}
+            onChanged={currentPrice => {
+              setPrice(currentPrice);
+              onPriceChanged?.();
+            }}
+          />
+        )}
 
       </div>
     </div>

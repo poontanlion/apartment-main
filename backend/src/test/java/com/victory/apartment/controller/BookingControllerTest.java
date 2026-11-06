@@ -9,6 +9,7 @@ import com.victory.apartment.repository.BookingRepository;
 import com.victory.apartment.repository.RoomRepository;
 import com.victory.apartment.service.ActivityLogService;
 import com.victory.apartment.service.LeaseService;
+import com.victory.apartment.service.RoomPriceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -18,6 +19,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.YearMonth;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -52,6 +54,9 @@ public class BookingControllerTest {
 
     @MockBean
     private LeaseService leaseService;
+
+    @MockBean
+    private RoomPriceService roomPriceService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -107,6 +112,77 @@ public class BookingControllerTest {
         ArgumentCaptor<AppNotification> notification = ArgumentCaptor.forClass(AppNotification.class);
         Mockito.verify(notifRepo).save(notification.capture());
         org.junit.jupiter.api.Assertions.assertFalse(notification.getValue().getMessage().contains("0812345678"));
+    }
+
+    private void bookingCanBeSaved() {
+        Mockito.when(roomRepository.findById("rm-123")).thenReturn(Optional.of(mockRoom));
+        Mockito.when(bookingRepository.findByRoomIdAndStatusIn(any(), any())).thenReturn(Collections.emptyList());
+        Mockito.when(bookingRepository.save(any(Booking.class))).thenAnswer(call -> call.getArgument(0));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions postBooking() throws Exception {
+        return mockMvc.perform(post("/api/bookings")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(mockBooking)));
+    }
+
+    @Test
+    void createBooking_pricesByCheckInMonth() throws Exception {
+        bookingCanBeSaved();
+        Mockito.when(roomPriceService.priceFor(mockRoom, YearMonth.of(2026, 12))).thenReturn(6500.0);
+        mockBooking.setCheckIn("2026-12-20");
+
+        postBooking().andExpect(status().isOk()).andExpect(jsonPath("$.totalPrice").value(6500.0));
+    }
+
+    @Test
+    void createBooking_ignoresClientPrice() throws Exception {
+        bookingCanBeSaved();
+        Mockito.when(roomPriceService.priceFor(mockRoom, YearMonth.of(2026, 12))).thenReturn(6500.0);
+        mockBooking.setCheckIn("2026-12-20");
+        mockBooking.setTotalPrice(1.0);
+
+        postBooking().andExpect(status().isOk()).andExpect(jsonPath("$.totalPrice").value(6500.0));
+    }
+
+    @Test
+    void createBooking_withRoomNumberStillPriced() throws Exception {
+        bookingCanBeSaved();
+        Mockito.when(roomPriceService.priceFor(mockRoom, YearMonth.of(2026, 12))).thenReturn(6500.0);
+        mockBooking.setCheckIn("2026-12-20");
+        mockBooking.setRoomNumber("A101");
+
+        postBooking().andExpect(status().isOk()).andExpect(jsonPath("$.totalPrice").value(6500.0));
+    }
+
+    @Test
+    void createBooking_unparseableCheckInUsesCurrentMonth() throws Exception {
+        bookingCanBeSaved();
+        Mockito.when(roomPriceService.currentMonth()).thenReturn(YearMonth.of(2026, 11));
+        Mockito.when(roomPriceService.priceFor(mockRoom, YearMonth.of(2026, 11))).thenReturn(6000.0);
+        mockBooking.setCheckIn("bad");
+
+        postBooking().andExpect(status().isOk()).andExpect(jsonPath("$.totalPrice").value(6000.0));
+    }
+
+    @Test
+    void createBooking_withoutCheckInUsesCurrentMonth() throws Exception {
+        bookingCanBeSaved();
+        Mockito.when(roomPriceService.currentMonth()).thenReturn(YearMonth.of(2026, 11));
+        Mockito.when(roomPriceService.priceFor(mockRoom, YearMonth.of(2026, 11))).thenReturn(6000.0);
+        mockBooking.setCheckIn(null);
+
+        postBooking().andExpect(status().isOk()).andExpect(jsonPath("$.totalPrice").value(6000.0));
+    }
+
+    @Test
+    void createBooking_unknownRoomKeepsNoClientPrice() throws Exception {
+        Mockito.when(roomRepository.findById("rm-123")).thenReturn(Optional.empty());
+        Mockito.when(bookingRepository.findByRoomIdAndStatusIn(any(), any())).thenReturn(Collections.emptyList());
+        Mockito.when(bookingRepository.save(any(Booking.class))).thenAnswer(call -> call.getArgument(0));
+        mockBooking.setTotalPrice(1.0);
+
+        postBooking().andExpect(status().isOk()).andExpect(jsonPath("$.totalPrice").doesNotExist());
     }
 
     /**

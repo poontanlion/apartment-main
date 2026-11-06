@@ -7,6 +7,7 @@ import com.victory.apartment.repository.BookingRepository;
 import com.victory.apartment.repository.LeaseRepository;
 import com.victory.apartment.repository.RoomRepository;
 import org.springframework.stereotype.Service;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
@@ -19,13 +20,15 @@ public class LeaseService {
     private final RoomRepository roomRepo;
     private final ActivityLogService logService;
     private final BookingRepository bookingRepo;
+    private final Clock clock;
 
     public LeaseService(LeaseRepository leaseRepo, RoomRepository roomRepo, ActivityLogService logService,
-                        BookingRepository bookingRepo) {
+                        BookingRepository bookingRepo, Clock clock) {
         this.leaseRepo = leaseRepo;
         this.roomRepo = roomRepo;
         this.logService = logService;
         this.bookingRepo = bookingRepo;
+        this.clock = clock;
     }
 
     public List<Lease> getAll() {
@@ -146,6 +149,9 @@ public class LeaseService {
             if (leaseData.getStatus() == null) leaseData.setStatus("Active");
         }
 
+        // Only terminate() sets this date, and saving replaces the whole entity with the client's copy.
+        leaseData.setTerminatedDate(leaseRepo.findById(leaseData.getId()).map(Lease::getTerminatedDate).orElse(null));
+
         Lease saved = leaseRepo.save(leaseData);
 
         // Update room status
@@ -153,7 +159,6 @@ public class LeaseService {
             room.setStatus("Occupied");
             room.setCurrentTenantId(saved.getTenantId());
             room.setCurrentTenantName(saved.getTenantName());
-            room.setPrice(saved.getRentAmount());
             roomRepo.save(room);
         });
 
@@ -171,6 +176,7 @@ public class LeaseService {
     public void terminate(String leaseId) {
         leaseRepo.findById(leaseId).ifPresent(lease -> {
             lease.setStatus("Terminated");
+            lease.setTerminatedDate(LocalDate.now(clock));
             leaseRepo.save(lease);
 
             // Hand the room to another active lease covering today; future-only leases leave it Available

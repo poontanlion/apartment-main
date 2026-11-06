@@ -8,12 +8,15 @@ import com.victory.apartment.repository.RoomRepository;
 import com.victory.apartment.repository.AppNotificationRepository;
 import com.victory.apartment.service.ActivityLogService;
 import com.victory.apartment.service.LeaseService;
+import com.victory.apartment.service.RoomPriceService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
@@ -43,18 +46,21 @@ public class BookingController {
     private final AppNotificationRepository notifRepo;
     private final ActivityLogService logService;
     private final LeaseService leaseService;
+    private final RoomPriceService priceService;
 
     public BookingController(
             BookingRepository repo,
             RoomRepository roomRepo,
             AppNotificationRepository notifRepo,
             ActivityLogService logService,
-            LeaseService leaseService) {
+            LeaseService leaseService,
+            RoomPriceService priceService) {
         this.repo = repo;
         this.roomRepo = roomRepo;
         this.notifRepo = notifRepo;
         this.logService = logService;
         this.leaseService = leaseService;
+        this.priceService = priceService;
     }
 
     // A room can be Available while holding a future lease, so dates must be checked against active leases.
@@ -73,6 +79,15 @@ public class BookingController {
                 String.format("ห้องนี้มีสัญญาเช่าช่วง %s ถึง %s แล้ว กรุณาเปลี่ยนช่วงวันที่หรือเลือกห้องว่างอื่น",
                         lease.getCheckInDate(), lease.getCheckOutDate())
             );
+        }
+    }
+
+    private YearMonth checkInMonth(Booking booking) {
+        if (booking.getCheckIn() == null) return priceService.currentMonth();
+        try {
+            return YearMonth.from(LocalDate.parse(booking.getCheckIn()));
+        } catch (DateTimeParseException ex) {
+            return priceService.currentMonth();
         }
     }
 
@@ -108,11 +123,14 @@ public class BookingController {
         if (booking.getCreatedAt() == null) booking.setCreatedAt(LocalDateTime.now());
         if (booking.getStatus() == null) booking.setStatus("Pending");
 
-        // Set room number from room id
-        if (booking.getRoomId() != null && (booking.getRoomNumber() == null || booking.getRoomNumber().isEmpty())) {
+        // This becomes the lease rent, so it never comes from the client.
+        booking.setTotalPrice(null);
+        if (booking.getRoomId() != null) {
             roomRepo.findById(booking.getRoomId()).ifPresent(room -> {
-                booking.setRoomNumber(room.getRoomNumber());
-                if (booking.getTotalPrice() == null) booking.setTotalPrice(room.getPrice());
+                if (booking.getRoomNumber() == null || booking.getRoomNumber().isEmpty()) {
+                    booking.setRoomNumber(room.getRoomNumber());
+                }
+                booking.setTotalPrice(priceService.priceFor(room, checkInMonth(booking)));
             });
         }
 
