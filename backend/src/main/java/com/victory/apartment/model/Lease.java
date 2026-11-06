@@ -38,6 +38,7 @@ public class Lease {
     @Column(columnDefinition = "text")
     private String notes;
     private LocalDateTime createdAt;
+    private LocalDate terminatedDate;
 
     public Lease() {}
 
@@ -79,6 +80,9 @@ public class Lease {
 
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
+    public LocalDate getTerminatedDate() { return terminatedDate; }
+    public void setTerminatedDate(LocalDate terminatedDate) { this.terminatedDate = terminatedDate; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

@@ -1,12 +1,18 @@
 package com.victory.apartment.controller;
 
 import com.victory.apartment.model.Room;
+import com.victory.apartment.model.RoomPrice;
 import com.victory.apartment.repository.RoomRepository;
 import com.victory.apartment.service.ActivityLogService;
+import com.victory.apartment.service.PriceRuleException;
+import com.victory.apartment.service.RoomPriceService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,10 +22,12 @@ public class RoomController {
 
     private final RoomRepository repo;
     private final ActivityLogService logService;
+    private final RoomPriceService priceService;
 
-    public RoomController(RoomRepository repo, ActivityLogService logService) {
+    public RoomController(RoomRepository repo, ActivityLogService logService, RoomPriceService priceService) {
         this.repo = repo;
         this.logService = logService;
+        this.priceService = priceService;
     }
 
     @GetMapping
@@ -41,6 +49,9 @@ public class RoomController {
     public Room create(@RequestBody Room room) {
         if (room.getId() == null || room.getId().isEmpty()) {
             room.setId("rm-" + UUID.randomUUID().toString().substring(0, 8));
+        } else if (repo.existsById(room.getId())) {
+            // Saving here would overwrite the room's price without any history.
+            throw new PriceRuleException(HttpStatus.CONFLICT, "ROOM_ALREADY_EXISTS", "A room with this id already exists.");
         }
         if (room.getCreatedAt() == null) room.setCreatedAt(LocalDateTime.now());
         if (room.getStatus() == null || room.getStatus().isEmpty()) room.setStatus("Available");
@@ -80,13 +91,17 @@ public class RoomController {
     @PutMapping("/{id}")
     public ResponseEntity<Room> update(@PathVariable String id, @RequestBody Room incoming) {
         return repo.findById(id).map(existing -> {
+            // First, so a rejected price saves nothing. Clients resend the unchanged price on every edit.
+            if (incoming.getPrice() != null && !incoming.getPrice().equals(existing.getPrice())) {
+                priceService.setPrice(id, incoming.getPrice(), priceService.currentMonth());
+                existing.setPrice(incoming.getPrice());
+            }
             if (incoming.getRoomNumber() != null) existing.setRoomNumber(incoming.getRoomNumber());
             if (incoming.getFloor() != null) existing.setFloor(incoming.getFloor());
             if (incoming.getRoomName() != null) existing.setRoomName(incoming.getRoomName());
             if (incoming.getRoomType() != null) existing.setRoomType(incoming.getRoomType());
             if (incoming.getDescription() != null) existing.setDescription(incoming.getDescription());
             if (incoming.getCapacity() != null) existing.setCapacity(incoming.getCapacity());
-            if (incoming.getPrice() != null) existing.setPrice(incoming.getPrice());
             if (incoming.getStatus() != null) existing.setStatus(incoming.getStatus());
             if (incoming.getAmenities() != null) existing.setAmenities(incoming.getAmenities());
             if (incoming.getSizeSqm() != null) existing.setSizeSqm(incoming.getSizeSqm());
@@ -113,6 +128,46 @@ public class RoomController {
         repo.deleteById(id);
         logService.log("Room Deleted", "Deleted unit ID " + id);
         return ResponseEntity.ok().build();
+    }
+
+    public record PriceHistory(String currentMonth, List<RoomPrice> prices) {}
+    public record PriceRequest(Double price, String effectiveMonth) {}
+    public record MonthPrice(String month, Double price) {}
+
+    @GetMapping("/{id}/prices")
+    public PriceHistory getPrices(@PathVariable String id) {
+        Room room = findRoom(id);
+        return new PriceHistory(priceService.currentMonth().toString(), priceService.history(room));
+    }
+
+    @PostMapping("/{id}/prices")
+    public RoomPrice addPrice(@PathVariable String id, @RequestBody PriceRequest request) {
+        return priceService.setPrice(id, request.price(), parseMonth(request.effectiveMonth()));
+    }
+
+    @DeleteMapping("/{id}/prices/{priceId}")
+    public ResponseEntity<Void> deletePrice(@PathVariable String id, @PathVariable String priceId) {
+        priceService.deleteScheduled(id, priceId);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{id}/price")
+    public MonthPrice getPriceForMonth(@PathVariable String id, @RequestParam String month) {
+        YearMonth parsed = parseMonth(month);
+        return new MonthPrice(parsed.toString(), priceService.priceFor(findRoom(id), parsed));
+    }
+
+    private Room findRoom(String id) {
+        return repo.findById(id)
+            .orElseThrow(() -> new PriceRuleException(HttpStatus.NOT_FOUND, "ROOM_NOT_FOUND", "Room not found."));
+    }
+
+    private YearMonth parseMonth(String month) {
+        try {
+            return YearMonth.parse(month);
+        } catch (DateTimeParseException | NullPointerException e) {
+            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "INVALID_MONTH", "Month must be in YYYY-MM format.");
+        }
     }
 }
 
