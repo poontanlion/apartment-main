@@ -33,3 +33,31 @@ export const priceRowStatus = (effectiveMonth: string, activeMonth: string): 'pa
   if (row === active) return 'current';
   return row < active ? 'past' : 'scheduled';
 };
+
+const THAI_MONTHS = [
+  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
+];
+
+/** A month as the report API takes it, such as "2026-08". */
+const monthKey = (year: number, monthIndex: number) => {
+  const date = new Date(Date.UTC(year, monthIndex, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
+export type ReportRangePreset = 'all' | 'thisYear' | 'last12';
+
+export const reportRange = (preset: ReportRangePreset, now: Date = new Date()): { from?: string; to?: string } => {
+  const { year, monthIndex } = bangkokMonth(now);
+  if (preset === 'thisYear') return { from: monthKey(year, 0), to: monthKey(year, 11) };
+  if (preset === 'last12') return { from: monthKey(year, monthIndex - 11), to: monthKey(year, monthIndex) };
+  return {};
+};
+
+/** Names a report's month key. A year key, such as "2026", is already its own name. */
+export const formatReportMonth = (key: string, language: 'th' | 'en'): string => {
+  const [year, month] = key.split('-');
+  if (!month) return key;
+  const names = language === 'th' ? THAI_MONTHS : MONTHS;
+  return `${names[Number(month) - 1]} ${year}`;
+};

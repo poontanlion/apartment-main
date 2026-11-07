@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { currentBillingMonth, priceRowStatus, recentBillingMonths } from './billingMonth';
+import { currentBillingMonth, formatReportMonth, priceRowStatus, recentBillingMonths, reportRange } from './billingMonth';
 
 describe('currentBillingMonth', () => {
   it('uses the format the server parses', () => {
@@ -36,5 +36,49 @@ describe('priceRowStatus', () => {
     expect(priceRowStatus('2000-01-01', '2026-11')).toBe('past');
     expect(priceRowStatus('2026-11-01', '2026-11')).toBe('current');
     expect(priceRowStatus('2026-12-01', '2026-11')).toBe('scheduled');
+  });
+});
+
+describe('reportRange', () => {
+  const now = new Date('2026-11-06T05:00:00Z');
+
+  it('leaves the range open for all time', () => {
+    expect(reportRange('all', now)).toEqual({});
+  });
+
+  it('covers the whole of this year', () => {
+    expect(reportRange('thisYear', now)).toEqual({ from: '2026-01', to: '2026-12' });
+  });
+
+  it('covers twelve months ending this month', () => {
+    expect(reportRange('last12', now)).toEqual({ from: '2025-12', to: '2026-11' });
+  });
+
+  it('pads single digit months', () => {
+    expect(reportRange('last12', new Date('2026-09-15T05:00:00Z'))).toEqual({ from: '2025-10', to: '2026-09' });
+  });
+
+  it('follows Bangkok across a new year', () => {
+    // 02:00 on 1 January 2027 in Bangkok.
+    expect(reportRange('thisYear', new Date('2026-12-31T19:00:00Z'))).toEqual({ from: '2027-01', to: '2027-12' });
+  });
+});
+
+describe('formatReportMonth', () => {
+  it('names a month in Thai', () => {
+    expect(formatReportMonth('2026-08', 'th')).toBe('สิงหาคม 2026');
+  });
+
+  it('names a month in English', () => {
+    expect(formatReportMonth('2026-08', 'en')).toBe('August 2026');
+  });
+
+  it('names the first and last months', () => {
+    expect(formatReportMonth('2026-01', 'th')).toBe('มกราคม 2026');
+    expect(formatReportMonth('2026-12', 'en')).toBe('December 2026');
+  });
+
+  it('leaves a year as it is', () => {
+    expect(formatReportMonth('2026', 'th')).toBe('2026');
   });
 });
