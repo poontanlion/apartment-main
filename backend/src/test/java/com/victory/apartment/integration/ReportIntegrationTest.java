@@ -1,6 +1,9 @@
 package com.victory.apartment.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.victory.apartment.TestcontainersConfiguration;
 import com.victory.apartment.model.Lease;
@@ -13,8 +16,10 @@ import com.victory.apartment.repository.UtilityBillRepository;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.web.servlet.MockMvc;
 
 import java.lang.reflect.RecordComponent;
 import java.time.LocalDate;
@@ -22,9 +27,11 @@ import java.util.Arrays;
 import java.util.UUID;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class ReportIntegrationTest {
 
+    @Autowired private MockMvc mockMvc;
     @Autowired private UtilityBillRepository bills;
     @Autowired private RoomRepository rooms;
     @Autowired private LeaseRepository leases;
@@ -113,6 +120,27 @@ class ReportIntegrationTest {
 
         assertThat(row.buildingId()).isNull();
         assertThat(row.roomNumber()).isEqualTo(room.getRoomNumber());
+    }
+
+    @Test
+    void summaryEndpoint_doesNotExposeSlip() throws Exception {
+        Room room = saveRoom("bld-report");
+        UtilityBill bill = saveBill(room, null);
+        bill.setSlipImage("SLIP-MARKER");
+        bill.setScannedDocument("SCAN-MARKER");
+        bills.save(bill);
+
+        String body = mockMvc.perform(get("/api/reports/summary")
+                .param("groupBy", "UNIT")
+                .param("search", room.getRoomNumber()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.rows.length()").value(1))
+            .andExpect(jsonPath("$.rows[0].label").value(room.getRoomNumber()))
+            .andExpect(jsonPath("$.totals.billed").value(5790.00))
+            .andExpect(jsonPath("$.totals.outstanding").value(5790.00))
+            .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("SLIP-MARKER", "SCAN-MARKER");
     }
 
     @Test
