@@ -28,8 +28,18 @@ public class UtilityBill {
     private Double electricRate;
     private Double electricAmount;
     private Double commonFee;
-    private Double totalAmount;
-    private String status; // Pending, Paid
+    private Double totalAmount; // Charges for this billing month only
+    @Column(name = "previous_outstanding")
+    private Double balanceForwardAmount;
+    private Double interestRate;
+    private Double interestAmount;
+    @Column(name = "total_due")
+    private Double amountDue;
+    @Column(name = "amount_paid")
+    private Double paidAmount;
+    @Column(name = "outstanding_balance")
+    private Double balanceDue;
+    private String status; // Pending, Partial, Paid
     private String paymentDate;
     @Column(columnDefinition = "text")
     private String slipImage;
@@ -75,6 +85,18 @@ public class UtilityBill {
     public void setCommonFee(Double commonFee) { this.commonFee = commonFee; }
     public Double getTotalAmount() { return totalAmount; }
     public void setTotalAmount(Double totalAmount) { this.totalAmount = totalAmount; }
+    public Double getBalanceForwardAmount() { return balanceForwardAmount; }
+    public void setBalanceForwardAmount(Double balanceForwardAmount) { this.balanceForwardAmount = balanceForwardAmount; }
+    public Double getInterestRate() { return interestRate; }
+    public void setInterestRate(Double interestRate) { this.interestRate = interestRate; }
+    public Double getInterestAmount() { return interestAmount; }
+    public void setInterestAmount(Double interestAmount) { this.interestAmount = interestAmount; }
+    public Double getAmountDue() { return amountDue; }
+    public void setAmountDue(Double amountDue) { this.amountDue = amountDue; }
+    public Double getPaidAmount() { return paidAmount; }
+    public void setPaidAmount(Double paidAmount) { this.paidAmount = paidAmount; }
+    public Double getBalanceDue() { return balanceDue; }
+    public void setBalanceDue(Double balanceDue) { this.balanceDue = balanceDue; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getPaymentDate() { return paymentDate; }

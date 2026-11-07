@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-/** Decides the rent of a bill: the lease in effect during the month, otherwise the room's price for that month. */
+/** Resolves the tenant and rent for a billing month. A bill requires a lease covering that month. */
 @Service
 public class RentQuoteService {
 
@@ -50,15 +50,11 @@ public class RentQuoteService {
         Optional<Lease> lease = leases.findByRoomIdAndStatusIn(roomId, List.of("Active", "Terminated")).stream()
                 .filter(l -> l.getRentAmount() != null && covers(l, month))
                 .max(Comparator.comparing(Lease::getCheckInDate));
-        if (lease.isPresent()) {
-            return new RentQuote(lease.get().getRentAmount(), "LEASE", lease.get().getId());
+        if (lease.isEmpty()) {
+            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "NO_TENANT_FOR_BILLING_MONTH",
+                    "Cannot issue a bill because no lease covers this room for the selected month.");
         }
-
-        Double price = prices.priceFor(room, month);
-        if (price == null) {
-            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "RENT_UNAVAILABLE", "This room has no price for that month.");
-        }
-        return new RentQuote(price, "ROOM_PRICE", null);
+        return new RentQuote(lease.get().getRentAmount(), "LEASE", lease.get().getId());
     }
 
     private static boolean covers(Lease lease, YearMonth month) {

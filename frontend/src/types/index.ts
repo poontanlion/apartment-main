@@ -112,7 +112,7 @@ export interface RentQuote {
   leaseId: string | null;
 }
 
-export type BillStatus = 'Pending' | 'Paid';
+export type BillStatus = 'Pending' | 'Partial' | 'Paid';
 
 export interface UtilityBill {
   id: string;
@@ -134,6 +134,12 @@ export interface UtilityBill {
   electricAmount: number;
   commonFee: number;
   totalAmount: number;
+  balanceForwardAmount?: number;
+  interestRate?: number;
+  interestAmount?: number;
+  amountDue?: number;
+  paidAmount?: number;
+  balanceDue?: number;
   status: BillStatus;
   paymentDate?: string;
   slipImage?: string;
