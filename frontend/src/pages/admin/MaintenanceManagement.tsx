@@ -22,7 +22,9 @@ export const MaintenanceManagement: React.FC = () => {
   const [searchParams] = useSearchParams();
   const initialBuildingId = searchParams.get('buildingId') || 'All';
 
-  const [activeTab, setActiveTab] = useState<'tasks' | 'supplies' | 'logs' | 'reminders'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'supplies' | 'logs' | 'reminders'>(() =>
+    searchParams.get('tab') === 'supplies' ? 'supplies' : 'tasks'
+  );
   const [occupancyFilter, setOccupancyFilter] = useState<'All' | 'Occupied' | 'Vacant/Common'>('All');
   const [buildingFilter, setBuildingFilter] = useState<string>(initialBuildingId);
   const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
@@ -62,6 +64,7 @@ export const MaintenanceManagement: React.FC = () => {
     unitName: 'pcs',
     stockQuantity: 10,
     unitCost: 100,
+    lowStockThreshold: 2,
   });
 
   const [showReminderModal, setShowReminderModal] = useState(false);
@@ -200,7 +203,12 @@ export const MaintenanceManagement: React.FC = () => {
       // Compute costs
       const suppliesCost = updated.reduce((sum, item) => sum + (item.quantity * (item.unitCost || 0)), 0);
       const laborCost = taskFormData.laborCost || 0;
-      const suppliesSummary = updated.map(item => `${item.name} x${item.quantity} (฿${item.quantity * (item.unitCost || 0)})`).join(', ');
+      const suppliesSummary = JSON.stringify(updated.map(item => ({
+        supply_id: item.supplyId,
+        name: item.name,
+        quantity: item.quantity,
+        unit_cost: item.unitCost || 0,
+      })));
 
       setTaskFormData(f => ({
         ...f,
@@ -219,9 +227,7 @@ export const MaintenanceManagement: React.FC = () => {
       const updated = prev.filter(item => item.supplyId !== supplyId);
       const suppliesCost = updated.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
       const labor = taskFormData.laborCost || 0;
-      const suppliesSummary = updated.length > 0
-        ? updated.map(item => `${item.name} x${item.quantity} (฿${item.quantity * item.unitCost})`).join(', ')
-        : '';
+      const suppliesSummary = JSON.stringify(updated.map(item => ({ supply_id: item.supplyId, name: item.name, quantity: item.quantity, unit_cost: item.unitCost })));
 
       setTaskFormData(f => ({
         ...f,
@@ -250,20 +256,11 @@ export const MaintenanceManagement: React.FC = () => {
         payload.occupancyType = (rm && (rm.status === 'Occupied' || !!rm.currentTenantId)) ? 'Occupied' : 'Vacant/Common';
       }
 
-      await saveMaintenanceTask(payload);
-
-      // Auto-deduct stock for used supplies
       if (usedSuppliesList.length > 0) {
-        for (const used of usedSuppliesList) {
-          const sup = supplies.find(s => s.id === used.supplyId);
-          if (sup) {
-            const newStock = Math.max(0, (sup.stockQuantity || 0) - used.quantity);
-            await saveSupply({ ...sup, stockQuantity: newStock });
-          }
-        }
+        payload.suppliesUsed = JSON.stringify(usedSuppliesList.map(item => ({ supply_id: item.supplyId, name: item.name, quantity: item.quantity, unit_cost: item.unitCost })));
       }
-
-      toast.success(language === 'th' ? 'บันทึกข้อมูลงานซ่อม ค่าใช้จ่าย และตัดสต็อกอะไหล่เรียบร้อยแล้ว' : 'Work order, expenses and parts saved successfully');
+      await saveMaintenanceTask(payload);
+      toast.success(language === 'th' ? 'บันทึกงานซ่อมแล้ว ระบบจะตัดสต็อกเมื่อปิดงาน' : 'Work order saved; stock is deducted when the task is completed');
       setShowTaskModal(false);
       fetchData();
     } catch (err) {
@@ -273,7 +270,21 @@ export const MaintenanceManagement: React.FC = () => {
   };
 
   const handleEditTask = (task: MaintenanceTask) => {
-    setUsedSuppliesList([]);
+    let parsedSupplies: Array<{ supplyId: string; name: string; quantity: number; unitCost: number; unitName: string }> = [];
+    try {
+      const parsed = JSON.parse(task.suppliesUsed || '[]');
+      if (Array.isArray(parsed)) parsedSupplies = parsed.map((entry: any) => {
+        const item = supplies.find(s => s.id === entry.supply_id || s.name === entry.name);
+        return { supplyId: entry.supply_id || item?.id || entry.name, name: entry.name || item?.name || 'Supply', quantity: Number(entry.quantity) || 1, unitCost: Number(entry.unit_cost ?? entry.unitCost ?? item?.unitCost) || 0, unitName: item?.unitName || 'pcs' };
+      });
+    } catch {
+      parsedSupplies = (task.suppliesUsed || '').split(',').map(part => {
+        const match = part.trim().match(/^(.*?)\s+x(\d+)/i);
+        const item = supplies.find(s => s.name === (match?.[1] || '').trim());
+        return item && match ? { supplyId: item.id, name: item.name, quantity: Number(match[2]), unitCost: item.unitCost || 0, unitName: item.unitName || 'pcs' } : null;
+      }).filter((item): item is NonNullable<typeof item> => item !== null);
+    }
+    setUsedSuppliesList(parsedSupplies);
     setTaskFormData({
       ...task,
       laborCost: task.laborCost || 0,
@@ -659,7 +670,7 @@ export const MaintenanceManagement: React.FC = () => {
             </div>
             <button
               onClick={() => {
-                setSupplyFormData({ name: '', category: 'Electrical', stockQuantity: 10, unitCost: 100, unitName: language === 'th' ? 'ชิ้น' : 'pcs' });
+                setSupplyFormData({ name: '', category: 'Electrical', stockQuantity: 10, unitCost: 100, lowStockThreshold: 2, unitName: language === 'th' ? 'ชิ้น' : 'pcs' });
                 setShowSupplyModal(true);
               }}
               className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 flex items-center gap-1.5 cursor-pointer shadow-xs"
@@ -670,7 +681,7 @@ export const MaintenanceManagement: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {supplies.map(item => {
-              const isLowStock = (item.stockQuantity ?? 0) <= 3;
+              const isLowStock = (item.stockQuantity ?? 0) <= (item.lowStockThreshold ?? 2);
               return (
                 <div key={item.id} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-nike-dark-surface shadow-xs space-y-3">
                   <div className="flex justify-between items-start">
@@ -693,6 +704,7 @@ export const MaintenanceManagement: React.FC = () => {
                     <span className="text-slate-500">{language === 'th' ? 'ราคาต่อหน่วย:' : 'Unit Price:'} <strong className="text-slate-900 dark:text-white font-bold">{formatCurrency(item.unitCost)}</strong></span>
                     <span className="text-slate-500">{language === 'th' ? 'คงเหลือ:' : 'Stock:'} <strong className="text-slate-900 dark:text-white font-extrabold text-sm">{item.stockQuantity}</strong> {item.unitName}</span>
                   </div>
+                  <p className="text-[11px] text-slate-500">{language === 'th' ? 'แจ้งเตือนเมื่อเหลือไม่เกิน:' : 'Alert when stock is at or below:'} <strong>{item.lowStockThreshold ?? 2} {item.unitName}</strong></p>
 
                   <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-1.5">
@@ -1293,7 +1305,7 @@ export const MaintenanceManagement: React.FC = () => {
                   <input
                     type="number"
                     required
-                    value={supplyFormData.stockQuantity || 10}
+                    value={supplyFormData.stockQuantity ?? 10}
                     onChange={(e) => setSupplyFormData({ ...supplyFormData, stockQuantity: Number(e.target.value) })}
                     className="w-full p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white focus:outline-none transition-all"
                   />
@@ -1303,10 +1315,16 @@ export const MaintenanceManagement: React.FC = () => {
                   <input
                     type="number"
                     required
-                    value={supplyFormData.unitCost || 100}
+                    value={supplyFormData.unitCost ?? 100}
                     onChange={(e) => setSupplyFormData({ ...supplyFormData, unitCost: Number(e.target.value) })}
                     className="w-full p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white focus:outline-none transition-all"
                   />
+                </div>
+                <div>
+                  <label className="block text-nike-mute mb-1 font-medium">{language === 'th' ? 'แจ้งเตือนเมื่อเหลือไม่เกิน' : 'Low stock alert threshold'}</label>
+                  <input type="number" min="0" required value={supplyFormData.lowStockThreshold ?? 2}
+                    onChange={(e) => setSupplyFormData({ ...supplyFormData, lowStockThreshold: Math.max(0, Number(e.target.value)) })}
+                    className="w-full p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white focus:outline-none transition-all" />
                 </div>
               </div>
             </div>

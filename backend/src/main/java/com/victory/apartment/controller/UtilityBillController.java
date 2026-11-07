@@ -3,6 +3,8 @@ package com.victory.apartment.controller;
 import com.victory.apartment.model.UtilityBill;
 import com.victory.apartment.model.Room;
 import com.victory.apartment.repository.UtilityBillRepository;
+import com.victory.apartment.repository.BillPaymentRepository;
+import com.victory.apartment.model.BillPayment;
 import com.victory.apartment.repository.RoomRepository;
 import com.victory.apartment.service.ActivityLogService;
 import com.victory.apartment.service.PriceRuleException;
@@ -11,6 +13,7 @@ import com.victory.apartment.service.RentQuoteService.RentQuote;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -25,13 +28,15 @@ public class UtilityBillController {
     private final RoomRepository roomRepo;
     private final ActivityLogService logService;
     private final RentQuoteService rentQuotes;
+    private final BillPaymentRepository paymentRepo;
 
     public UtilityBillController(UtilityBillRepository repo, RoomRepository roomRepo, ActivityLogService logService,
-                                 RentQuoteService rentQuotes) {
+                                 RentQuoteService rentQuotes, BillPaymentRepository paymentRepo) {
         this.repo = repo;
         this.roomRepo = roomRepo;
         this.logService = logService;
         this.rentQuotes = rentQuotes;
+        this.paymentRepo = paymentRepo;
     }
 
     @GetMapping
@@ -60,7 +65,8 @@ public class UtilityBillController {
         bill.setLeaseId(quote.leaseId());
         calculateAmounts(bill);
 
-        if (bill.getStatus() == null) bill.setStatus("Pending");
+        bill.setStatus("Unpaid");
+        bill.setPaidAmount(0.0);
 
         UtilityBill saved = repo.save(bill);
 
@@ -85,6 +91,11 @@ public class UtilityBillController {
             bill.setId(id);
             bill.setBillingMonth(stored.getBillingMonth());
             bill.setRentAmount(stored.getRentAmount() != null ? stored.getRentAmount() : rentInsideTotal(stored));
+            bill.setPaidAmount(stored.getPaidAmount() != null ? stored.getPaidAmount() : 0.0);
+            bill.setStatus(stored.getStatus());
+            bill.setPaymentDate(stored.getPaymentDate());
+            bill.setSlipImage(stored.getSlipImage());
+            bill.setScannedDocument(stored.getScannedDocument());
             calculateAmounts(bill);
             return ResponseEntity.ok(repo.save(bill));
         }).orElse(ResponseEntity.notFound().build());
@@ -121,18 +132,54 @@ public class UtilityBillController {
     @PutMapping("/{id}/status")
     public ResponseEntity<UtilityBill> updateStatus(@PathVariable String id, @RequestBody Map<String, String> req) {
         return repo.findById(id).map(bill -> {
-            bill.setStatus(req.get("status"));
-            if ("Paid".equals(req.get("status"))) {
-                bill.setPaymentDate(java.time.LocalDate.now().toString());
-            }
             if (req.containsKey("slipImage")) {
                 bill.setSlipImage(req.get("slipImage"));
             }
             if (req.containsKey("scannedDocument")) {
                 bill.setScannedDocument(req.get("scannedDocument"));
             }
-            logService.log("Bill Status Updated", String.format("Bill %s set to %s", bill.getInvoiceNo(), req.get("status")));
+            logService.log("Bill Document Updated", String.format("Payment evidence updated for bill %s", bill.getInvoiceNo()));
             return ResponseEntity.ok(repo.save(bill));
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{id}/payments")
+    public ResponseEntity<List<BillPayment>> getPayments(@PathVariable String id) {
+        if (!repo.existsById(id)) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(paymentRepo.findByBillIdOrderByPaymentDateDesc(id));
+    }
+
+    @PostMapping("/{id}/payments")
+    @Transactional
+    public ResponseEntity<?> addPayment(@PathVariable String id, @RequestBody Map<String, Object> request) {
+        UtilityBill bill = repo.findById(id).orElse(null);
+        if (bill == null) return ResponseEntity.notFound().build();
+        double amount;
+        try {
+            amount = Double.parseDouble(String.valueOf(request.get("amount")));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Payment amount must be a positive number."));
+        }
+        double total = bill.getTotalAmount() != null ? bill.getTotalAmount() : 0;
+        double paid = bill.getPaidAmount() != null ? bill.getPaidAmount() : 0;
+        if (!Double.isFinite(amount) || amount <= 0 || amount > total - paid + 0.000001) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Payment must be greater than zero and cannot exceed the outstanding balance."));
+        }
+        BillPayment payment = new BillPayment();
+        payment.setId("pay-" + UUID.randomUUID().toString().substring(0, 12));
+        payment.setBillId(id);
+        payment.setAmount(amount);
+        payment.setPaymentDate(LocalDateTime.now());
+        payment.setNote(request.get("note") != null ? String.valueOf(request.get("note")) : null);
+        payment.setProofImage(request.get("proofImage") != null ? String.valueOf(request.get("proofImage")) : null);
+        paymentRepo.save(payment);
+
+        paid += amount;
+        bill.setPaidAmount(paid);
+        bill.setStatus(paid + 0.000001 >= total ? "Paid" : "Partial");
+        bill.setPaymentDate(java.time.LocalDate.now().toString());
+        repo.save(bill);
+        logService.log("Bill Payment Recorded", String.format("Recorded %.2f THB for bill %s", amount, bill.getInvoiceNo()));
+        return ResponseEntity.ok(Map.of("bill", bill, "payment", payment));
     }
 }

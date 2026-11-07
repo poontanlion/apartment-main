@@ -1,5 +1,5 @@
 import {
-  Room, Tenant, Lease, UtilityBill, BillStatus, MaintenanceTask, SupplyItem,
+  Room, Tenant, Lease, UtilityBill, BillStatus, BillPayment, MaintenanceTask, SupplyItem,
   MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication,
   RoomPrice, RoomPriceHistory, RentQuote
 } from '../types';
@@ -221,6 +221,12 @@ export const updateBillStatus = async (billId: string, status: BillStatus, slipI
     return null;
   }
 };
+
+export const getBillPayments = (billId: string): Promise<BillPayment[]> =>
+  fetchJson<BillPayment[]>(`${API_BASE}/utility-bills/${billId}/payments`);
+
+export const addBillPayment = (billId: string, payload: { amount: number; note?: string; proofImage?: string }): Promise<{ bill: UtilityBill; payment: BillPayment }> =>
+  fetchJson<{ bill: UtilityBill; payment: BillPayment }>(`${API_BASE}/utility-bills/${billId}/payments`, { method: 'POST', body: JSON.stringify(payload) });
 
 // ----------------------------------------------------
 // MAINTENANCE TASKS & SUPPLY USAGE API

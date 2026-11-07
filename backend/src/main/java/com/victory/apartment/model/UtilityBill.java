@@ -29,7 +29,9 @@ public class UtilityBill {
     private Double electricAmount;
     private Double commonFee;
     private Double totalAmount;
-    private String status; // Pending, Paid
+    @Column(nullable = false)
+    private Double paidAmount = 0.0;
+    private String status; // Unpaid, Partial, Paid
     private String paymentDate;
     @Column(columnDefinition = "text")
     private String slipImage;
@@ -75,6 +77,8 @@ public class UtilityBill {
     public void setCommonFee(Double commonFee) { this.commonFee = commonFee; }
     public Double getTotalAmount() { return totalAmount; }
     public void setTotalAmount(Double totalAmount) { this.totalAmount = totalAmount; }
+    public Double getPaidAmount() { return paidAmount; }
+    public void setPaidAmount(Double paidAmount) { this.paidAmount = paidAmount; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getPaymentDate() { return paymentDate; }

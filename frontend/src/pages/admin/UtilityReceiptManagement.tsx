@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UtilityBill, Room, Lease, RentQuote } from '../../types';
-import { getUtilityBills, saveUtilityBill, updateBillStatus, getRooms, getLeases, getRentQuote } from '../../services/api';
+import { UtilityBill, Room, Lease, RentQuote, BillPayment } from '../../types';
+import { getUtilityBills, saveUtilityBill, updateBillStatus, getRooms, getLeases, getRentQuote, getBillPayments, addBillPayment } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import { currentBillingMonth, recentBillingMonths } from '../../utils/billingMonth';
-import { FileText, Plus, Printer, Droplets, Zap, Search, Building2 } from 'lucide-react';
+import { FileText, Plus, Printer, Droplets, Zap, Search, Building2, CreditCard, Upload, X } from 'lucide-react';
 import { ReceiptModal } from '../../components/admin/ReceiptModal';
 import { BulkReceiptModal } from '../../components/admin/BulkReceiptModal';
 import { ScannedDocumentModal } from '../../components/admin/ScannedDocumentModal';
@@ -37,7 +37,7 @@ export const UtilityReceiptManagement: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [leases, setLeases] = useState<Lease[]>([]);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Paid'>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Unpaid' | 'Partial' | 'Paid'>('All');
   const [monthFilter, setMonthFilter] = useState<string>('All');
   const [buildingFilter, setBuildingFilter] = useState<string>(initialBuildingId);
 
@@ -46,6 +46,11 @@ export const UtilityReceiptManagement: React.FC = () => {
   const [selectedBillIds, setSelectedBillIds] = useState<string[]>([]);
   const [showBulkPrintModal, setShowBulkPrintModal] = useState(false);
   const [scannedDocBill, setScannedDocBill] = useState<UtilityBill | null>(null);
+  const [paymentBill, setPaymentBill] = useState<UtilityBill | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentNote, setPaymentNote] = useState('');
+  const [paymentProof, setPaymentProof] = useState('');
+  const [paymentHistory, setPaymentHistory] = useState<BillPayment[]>([]);
 
   const handleToggleSelectAll = () => {
     if (selectedBillIds.length === filteredBills.length) {
@@ -178,11 +183,23 @@ export const UtilityReceiptManagement: React.FC = () => {
     }
   };
 
-  const handleToggleStatus = async (billId: string, currentStatus: UtilityBill['status']) => {
-    const nextStatus = currentStatus === 'Pending' ? 'Paid' : 'Pending';
-    await updateBillStatus(billId, nextStatus);
-    toast.success(`Status updated to ${nextStatus}`);
-    fetchData();
+  const openPaymentModal = async (bill: UtilityBill) => {
+    setPaymentBill(bill);
+    setPaymentAmount(String(Math.max(0, (bill.totalAmount || 0) - (bill.paidAmount || 0))));
+    setPaymentNote('');
+    setPaymentProof('');
+    try { setPaymentHistory(await getBillPayments(bill.id)); } catch { setPaymentHistory([]); }
+  };
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentBill) return;
+    try {
+      await addBillPayment(paymentBill.id, { amount: Number(paymentAmount), note: paymentNote || undefined, proofImage: paymentProof || undefined });
+      toast.success(language === 'th' ? 'บันทึกการชำระเงินแล้ว' : 'Payment recorded');
+      setPaymentBill(null);
+      await fetchData();
+    } catch (err) { toast.error((err as Error).message); }
   };
 
   const waterUnitsPreview = Math.max(0, (billFormData.currWaterMeter || 0) - (billFormData.prevWaterMeter || 0));
@@ -248,7 +265,7 @@ export const UtilityReceiptManagement: React.FC = () => {
         <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card p-5 rounded-2xl">
           <span className="text-xs text-nike-mute dark:text-nike-stone font-medium">{t('util.pending')}</span>
           <span className="text-3xl font-bold text-amber-600 dark:text-amber-400 block mt-1">
-            {bills.filter(b => b.status === 'Pending').length} {language === 'th' ? 'บิล' : 'bills'}
+            {bills.filter(b => b.status !== 'Paid').length} {language === 'th' ? 'บิลค้าง' : 'outstanding bills'}
           </span>
         </div>
         <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card p-5 rounded-2xl">
@@ -299,10 +316,16 @@ export const UtilityReceiptManagement: React.FC = () => {
                 {t('common.all')}
               </button>
               <button
-                onClick={() => setStatusFilter('Pending')}
-                className={`px-3 py-1 rounded-lg font-medium transition-all ${statusFilter === 'Pending' ? 'bg-nike-canvas dark:bg-nike-dark-elevated text-amber-600 dark:text-amber-400 shadow-xs' : 'text-nike-mute'}`}
+                onClick={() => setStatusFilter('Unpaid')}
+                className={`px-3 py-1 rounded-lg font-medium transition-all ${statusFilter === 'Unpaid' ? 'bg-nike-canvas dark:bg-nike-dark-elevated text-amber-600 dark:text-amber-400 shadow-xs' : 'text-nike-mute'}`}
               >
                 {t('status.unpaid')}
+              </button>
+              <button
+                onClick={() => setStatusFilter('Partial')}
+                className={`px-3 py-1 rounded-lg font-medium transition-all ${statusFilter === 'Partial' ? 'bg-nike-canvas dark:bg-nike-dark-elevated text-blue-600 dark:text-blue-400 shadow-xs' : 'text-nike-mute'}`}
+              >
+                {language === 'th' ? 'จ่ายบางส่วน' : 'Partial'}
               </button>
               <button
                 onClick={() => setStatusFilter('Paid')}
@@ -417,21 +440,24 @@ export const UtilityReceiptManagement: React.FC = () => {
                     </td>
                     <td className="p-3 font-bold text-nike-ink dark:text-white text-sm">
                       {formatCurrency(bill.totalAmount)}
+                      <span className="block text-[10px] font-medium text-emerald-600">{language === 'th' ? 'จ่ายแล้ว' : 'Paid'}: {formatCurrency(bill.paidAmount || 0)}</span>
+                      <span className="block text-[10px] font-medium text-rose-600">{language === 'th' ? 'คงเหลือ' : 'Due'}: {formatCurrency(Math.max(0, bill.totalAmount - (bill.paidAmount || 0)))}</span>
                     </td>
                     <td className="p-3">
-                      <button
-                        onClick={() => handleToggleStatus(bill.id, bill.status)}
-                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all ${
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
                           bill.status === 'Paid'
                             ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                            : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                            : bill.status === 'Partial'
+                              ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+                              : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
                         }`}
                       >
-                        {bill.status === 'Paid' ? t('status.paid') : t('status.unpaid')}
-                      </button>
+                        {bill.status === 'Paid' ? t('status.paid') : bill.status === 'Partial' ? (language === 'th' ? 'จ่ายบางส่วน' : 'Partial') : t('status.unpaid')}
+                      </span>
                     </td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {bill.status !== 'Paid' && <button type="button" onClick={() => void openPaymentModal(bill)} className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center gap-1"><CreditCard className="w-3.5 h-3.5" />{language === 'th' ? 'รับชำระ' : 'Record payment'}</button>}
                         <button
                           type="button"
                           onClick={() => setScannedDocBill(bill)}
@@ -705,6 +731,41 @@ export const UtilityReceiptManagement: React.FC = () => {
                 {language === 'th' ? 'บันทึกและสร้างบิล' : 'Save & Generate Bill'}
               </button>
             </div>
+          </form>
+        </div>
+      )}
+
+      {paymentBill && (
+        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <form onSubmit={handleRecordPayment} className="bg-white dark:bg-nike-dark-elevated border border-slate-200 dark:border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl my-8">
+            <div className="flex justify-between items-start">
+              <div><h3 className="text-lg font-bold text-nike-ink dark:text-white">{language === 'th' ? 'บันทึกการชำระเงิน' : 'Record Payment'}</h3>
+                <p className="text-xs text-slate-500">{paymentBill.invoiceNo} · {language === 'th' ? 'ห้อง' : 'Unit'} {paymentBill.roomNumber}</p></div>
+              <button type="button" onClick={() => setPaymentBill(null)} aria-label="Close"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 text-sm space-y-1">
+              <div className="flex justify-between"><span>{language === 'th' ? 'ยอดบิล' : 'Bill total'}</span><strong>{formatCurrency(paymentBill.totalAmount)}</strong></div>
+              <div className="flex justify-between"><span>{language === 'th' ? 'ชำระแล้ว' : 'Already paid'}</span><strong>{formatCurrency(paymentBill.paidAmount || 0)}</strong></div>
+              <div className="flex justify-between text-rose-600"><span>{language === 'th' ? 'ยอดคงเหลือ' : 'Outstanding'}</span><strong>{formatCurrency(paymentBill.totalAmount - (paymentBill.paidAmount || 0))}</strong></div>
+            </div>
+            <label className="block text-xs font-semibold">{language === 'th' ? 'ยอดที่รับชำระ *' : 'Amount received *'}
+              <input type="number" min="0.01" step="0.01" max={paymentBill.totalAmount - (paymentBill.paidAmount || 0)} required value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} className="mt-1 w-full rounded-xl border p-2.5 bg-white dark:bg-slate-800" />
+            </label>
+            <label className="block text-xs font-semibold">{language === 'th' ? 'หมายเหตุ (ไม่บังคับ)' : 'Note (optional)'}
+              <input value={paymentNote} onChange={e => setPaymentNote(e.target.value)} className="mt-1 w-full rounded-xl border p-2.5 bg-white dark:bg-slate-800" />
+            </label>
+            <label className="block text-xs font-semibold">{language === 'th' ? 'แนบสลิป (ไม่บังคับ, สูงสุด 5 MB)' : 'Payment proof (optional, max 5 MB)'}
+              <span className="mt-1 flex items-center gap-2 rounded-xl border p-2.5 text-slate-500"><Upload className="w-4 h-4" /><input type="file" accept="image/*,application/pdf" onChange={e => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (file.size > 5 * 1024 * 1024) { toast.error(language === 'th' ? 'ไฟล์ต้องมีขนาดไม่เกิน 5 MB' : 'File must be 5 MB or smaller'); e.target.value = ''; return; }
+                const reader = new FileReader(); reader.onload = () => setPaymentProof(String(reader.result || '')); reader.readAsDataURL(file);
+              }} className="w-full text-xs" /></span>
+            </label>
+            {paymentHistory.length > 0 && <div className="border-t pt-3 space-y-2"><h4 className="text-xs font-bold">{language === 'th' ? 'ประวัติการชำระ' : 'Payment history'}</h4>
+              {paymentHistory.map(p => <div key={p.id} className="flex justify-between text-xs text-slate-600"><span>{new Date(p.paymentDate).toLocaleString()} {p.note ? `· ${p.note}` : ''} {p.proofImage ? <a href={p.proofImage} target="_blank" rel="noreferrer" className="text-blue-600 underline">{language === 'th' ? 'หลักฐาน' : 'Proof'}</a> : null}</span><strong>{formatCurrency(p.amount)}</strong></div>)}
+            </div>}
+            <div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setPaymentBill(null)} className="rounded-xl border px-4 py-2 text-sm">{language === 'th' ? 'ยกเลิก' : 'Cancel'}</button><button type="submit" className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">{language === 'th' ? 'บันทึกยอดชำระ' : 'Save payment'}</button></div>
           </form>
         </div>
       )}
