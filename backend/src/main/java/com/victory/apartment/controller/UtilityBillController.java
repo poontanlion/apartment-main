@@ -5,6 +5,7 @@ import com.victory.apartment.model.Room;
 import com.victory.apartment.repository.UtilityBillRepository;
 import com.victory.apartment.repository.RoomRepository;
 import com.victory.apartment.service.ActivityLogService;
+import com.victory.apartment.service.BillAmounts;
 import com.victory.apartment.service.PriceRuleException;
 import com.victory.apartment.service.RentQuoteService;
 import com.victory.apartment.service.RentQuoteService.RentQuote;
@@ -90,13 +91,8 @@ public class UtilityBillController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    /** Older bills stored no rent, but their total already includes the rent charged then. */
     private double rentInsideTotal(UtilityBill bill) {
-        double total = bill.getTotalAmount() != null ? bill.getTotalAmount() : 0;
-        double water = bill.getWaterAmount() != null ? bill.getWaterAmount() : 0;
-        double electric = bill.getElectricAmount() != null ? bill.getElectricAmount() : 0;
-        double commonFee = bill.getCommonFee() != null ? bill.getCommonFee() : 300;
-        return Math.max(0, total - water - electric - commonFee);
+        return BillAmounts.rentInsideTotal(bill.getTotalAmount(), bill.getWaterAmount(), bill.getElectricAmount(), bill.getCommonFee());
     }
 
     @GetMapping("/rent-quote")

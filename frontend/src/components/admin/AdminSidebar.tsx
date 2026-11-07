@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileSignature, FileText, Wrench,
   BedDouble, History, Bell, ArrowLeft, Building2, CalendarCheck,
-  Sun, Moon, Menu, X, Globe, KeyRound, FolderArchive
+  Sun, Moon, Menu, X, Globe, KeyRound, FolderArchive, BarChart3
 } from 'lucide-react';
 import { getNotifications, getBookings } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
@@ -50,6 +50,7 @@ export const AdminSidebar: React.FC = () => {
     { name: t('admin.nav.buildings'), path: '/admin/buildings', icon: Building2 },
     { name: t('admin.nav.tenants'), path: '/admin/tenants', icon: FileSignature },
     { name: t('admin.nav.utilityBills'), path: '/admin/utility-bills', icon: FileText },
+    { name: t('admin.nav.reports'), path: '/admin/reports', icon: BarChart3 },
     { name: t('admin.nav.maintenance'), path: '/admin/maintenance', icon: Wrench },
     { name: language === 'th' ? 'คลังเอกสารสแกน' : 'Document Center', path: '/admin/documents', icon: FolderArchive },
     { name: t('admin.nav.rooms'), path: '/admin/rooms', icon: BedDouble },

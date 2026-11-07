@@ -1,7 +1,7 @@
 import {
   Room, Tenant, Lease, UtilityBill, BillStatus, MaintenanceTask, SupplyItem,
   MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication,
-  RoomPrice, RoomPriceHistory, RentQuote
+  RoomPrice, RoomPriceHistory, RentQuote, SummaryReport, SummaryReportFilters
 } from '../types';
 import { BookingLeaseError } from '../utils/bookingLeaseErrors';
 import { BookingRequestError } from '../utils/bookingErrors';
@@ -220,6 +220,18 @@ export const updateBillStatus = async (billId: string, status: BillStatus, slipI
   } catch {
     return null;
   }
+};
+
+// ----------------------------------------------------
+// SUMMARY REPORTS API
+// ----------------------------------------------------
+/** Lets errors through: a failed report must not read as a report of zero. */
+export const getSummaryReport = (filters: SummaryReportFilters, signal?: AbortSignal): Promise<SummaryReport> => {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([name, value]) => {
+    if (value) params.set(name, value);
+  });
+  return fetchJson<SummaryReport>(`${API_BASE}/reports/summary?${params}`, { signal });
 };
 
 // ----------------------------------------------------

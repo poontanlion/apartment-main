@@ -141,6 +141,41 @@ export interface UtilityBill {
   createdAt: string;
 }
 
+export type ReportGroupBy = 'UNIT' | 'TENANT' | 'MONTH' | 'YEAR';
+
+export interface ReportAmounts {
+  billCount: number;
+  rent: number;
+  water: number;
+  electric: number;
+  commonFee: number;
+  billed: number;
+  paid: number;
+  outstanding: number;
+}
+
+export interface SummaryReportRow extends ReportAmounts {
+  key: string;
+  label: string;
+}
+
+export interface SummaryReport {
+  groupBy: ReportGroupBy;
+  totals: ReportAmounts;
+  rows: SummaryReportRow[];
+  skippedBills: number;
+  duplicateRoomMonths: number;
+}
+
+export interface SummaryReportFilters {
+  groupBy: ReportGroupBy;
+  from?: string;
+  to?: string;
+  buildingId?: string;
+  status?: 'All' | BillStatus;
+  search?: string;
+}
+
 export type MaintenanceCategory = 'Light bulb replacement' | 'Air-con servicing' | 'Plumbing' | 'Electrical' | 'General Repair';
 export type MaintenancePriority = 'Low' | 'Medium' | 'High';
 export type MaintenanceTaskStatus = 'Pending' | 'In Progress' | 'Completed';
