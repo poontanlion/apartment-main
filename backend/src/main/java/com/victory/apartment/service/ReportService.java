@@ -9,6 +9,7 @@ import java.math.RoundingMode;
 import java.text.Collator;
 import java.time.YearMonth;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -19,6 +20,7 @@ public class ReportService {
 
     /** What the bill form stores when it finds no tenant for the room. */
     private static final String PLACEHOLDER_TENANT = "Tenant";
+    private static final String PAID = "Paid";
 
     public enum GroupBy { UNIT, TENANT, MONTH, YEAR }
 
@@ -45,14 +47,22 @@ public class ReportService {
     public Summary summarize(Filter filter) {
         Map<String, Group> groups = new LinkedHashMap<>();
         Group overall = new Group("", "");
+        Map<String, Integer> billsPerRoomMonth = new HashMap<>();
         long skippedBills = 0;
 
         for (BillReportRow bill : bills.findAllForReport()) {
+            if (!matchesBuilding(filter, bill) || !matchesStatus(filter, bill) || !matchesSearch(filter, bill)) {
+                continue;
+            }
             YearMonth month = readableMonth(bill);
             if (month == null) {
                 skippedBills++;
                 continue;
             }
+            if (!inRange(filter, month)) {
+                continue;
+            }
+            billsPerRoomMonth.merge(roomKey(bill) + "|" + month, 1, Integer::sum);
             overall.add(bill);
             Group group = groupFor(filter.groupBy(), bill, month, groups);
             group.add(bill);
@@ -65,7 +75,42 @@ public class ReportService {
             .sorted(ordering(filter.groupBy()))
             .map(Group::toRow)
             .toList();
-        return new Summary(filter.groupBy(), overall.toTotals(), rows, skippedBills, 0);
+        long duplicateRoomMonths = billsPerRoomMonth.values().stream().filter(count -> count > 1).count();
+        return new Summary(filter.groupBy(), overall.toTotals(), rows, skippedBills, duplicateRoomMonths);
+    }
+
+    private static boolean matchesBuilding(Filter filter, BillReportRow bill) {
+        return isUnset(filter.buildingId()) || filter.buildingId().equals(bill.buildingId());
+    }
+
+    /** Pending means anything not paid, which keeps paid + outstanding equal to billed. */
+    private static boolean matchesStatus(Filter filter, BillReportRow bill) {
+        if (isUnset(filter.status())) {
+            return true;
+        }
+        boolean paid = PAID.equals(bill.status());
+        return PAID.equals(filter.status()) ? paid : !paid;
+    }
+
+    private static boolean matchesSearch(Filter filter, BillReportRow bill) {
+        String search = filter.search() != null ? filter.search().trim().toLowerCase(Locale.ROOT) : "";
+        return search.isEmpty()
+            || contains(bill.roomNumber(), search)
+            || contains(bill.tenantName(), search)
+            || contains(bill.leaseTenantName(), search);
+    }
+
+    private static boolean contains(String value, String lowerCaseSearch) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(lowerCaseSearch);
+    }
+
+    private static boolean inRange(Filter filter, YearMonth month) {
+        return (filter.from() == null || !month.isBefore(filter.from()))
+            && (filter.to() == null || !month.isAfter(filter.to()));
+    }
+
+    private static boolean isUnset(String value) {
+        return value == null || value.isEmpty() || "All".equals(value);
     }
 
     private static YearMonth readableMonth(BillReportRow bill) {
@@ -178,7 +223,7 @@ public class ReportService {
             electric = electric.add(amount(bill.electricAmount()));
             commonFee = commonFee.add(BigDecimal.valueOf(BillAmounts.commonFeeOrDefault(bill.commonFee())));
             billed = billed.add(amount(bill.totalAmount()));
-            if ("Paid".equals(bill.status())) {
+            if (PAID.equals(bill.status())) {
                 paid = paid.add(amount(bill.totalAmount()));
             }
         }

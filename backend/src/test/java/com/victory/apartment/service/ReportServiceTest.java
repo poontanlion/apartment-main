@@ -14,6 +14,7 @@ import com.victory.apartment.service.ReportService.Summary;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,7 +37,9 @@ class ReportServiceTest {
         String status = "Paid";
         String leaseTenantId;
         String leaseTenantName;
+        String buildingId = "bld-1";
 
+        Bill building(String id) { buildingId = id; return this; }
         Bill room(String id, String number) { roomId = id; roomNumber = number; return this; }
         Bill tenant(String name) { tenantName = name; return this; }
         Bill lease(String tenantId, String name) { leaseTenantId = tenantId; leaseTenantName = name; return this; }
@@ -50,7 +53,7 @@ class ReportServiceTest {
 
         BillReportRow row(int index) {
             return new BillReportRow("bill-" + index, null, roomId, roomNumber, tenantName, billingMonth,
-                rent, water, electric, commonFee, total, status, leaseTenantId, leaseTenantName, "bld-1");
+                rent, water, electric, commonFee, total, status, leaseTenantId, leaseTenantName, buildingId);
         }
     }
 
@@ -59,12 +62,32 @@ class ReportServiceTest {
     }
 
     private Summary summarize(GroupBy groupBy, Bill... bills) {
+        return summarize(Filter.of(groupBy), bills);
+    }
+
+    private Summary summarize(Filter filter, Bill... bills) {
         List<BillReportRow> rows = new ArrayList<>();
         for (int i = 0; i < bills.length; i++) {
             rows.add(bills[i].row(i));
         }
         when(repository.findAllForReport()).thenReturn(rows);
-        return service.summarize(Filter.of(groupBy));
+        return service.summarize(filter);
+    }
+
+    private static Filter monthRange(GroupBy groupBy, String from, String to) {
+        return new Filter(groupBy, YearMonth.parse(from), YearMonth.parse(to), null, null, null);
+    }
+
+    private static Filter building(String buildingId) {
+        return new Filter(GroupBy.UNIT, null, null, buildingId, null, null);
+    }
+
+    private static Filter status(String status) {
+        return new Filter(GroupBy.UNIT, null, null, null, status, null);
+    }
+
+    private static Filter search(String search) {
+        return new Filter(GroupBy.UNIT, null, null, null, null, search);
     }
 
     private static List<String> keys(Summary summary) {
@@ -308,6 +331,152 @@ class ReportServiceTest {
             bill().tenant("กมล"));
 
         assertThat(labels(summary)).containsExactly("กมล", "เกษม", "ข้าว");
+    }
+
+    @Test
+    void filtersMonthRange_inclusive() {
+        Summary summary = summarize(monthRange(GroupBy.MONTH, "2026-01", "2026-02"),
+            bill().month("December 2025"),
+            bill().month("January 2026"),
+            bill().month("February 2026"),
+            bill().month("March 2026"));
+
+        assertThat(keys(summary)).containsExactly("2026-02", "2026-01");
+        assertThat(summary.totals().billCount()).isEqualTo(2);
+    }
+
+    @Test
+    void filtersMonthRange_acrossYears() {
+        Summary summary = summarize(monthRange(GroupBy.MONTH, "2025-12", "2026-01"),
+            bill().month("November 2025"),
+            bill().month("December 2025"),
+            bill().month("January 2026"),
+            bill().month("February 2026"));
+
+        assertThat(keys(summary)).containsExactly("2026-01", "2025-12");
+    }
+
+    @Test
+    void filtersMonthRange_openEnded() {
+        Bill[] bills = {bill().month("January 2026"), bill().month("March 2026")};
+
+        Filter onlyFrom = new Filter(GroupBy.MONTH, YearMonth.parse("2026-02"), null, null, null, null);
+        assertThat(keys(summarize(onlyFrom, bills))).containsExactly("2026-03");
+
+        Filter onlyTo = new Filter(GroupBy.MONTH, null, YearMonth.parse("2026-02"), null, null, null);
+        assertThat(keys(summarize(onlyTo, bills))).containsExactly("2026-01");
+    }
+
+    @Test
+    void filtersBuilding_excludesDeletedRoom() {
+        Bill inBuilding = bill().building("bld-1");
+        Bill otherBuilding = bill().building("bld-2").room("rm-B101", "B101");
+        Bill deletedRoom = bill().building(null).room("rm-gone", "Z999");
+
+        assertThat(labels(summarize(building("bld-1"), inBuilding, otherBuilding, deletedRoom)))
+            .containsExactly("A101");
+        assertThat(labels(summarize(building("All"), inBuilding, otherBuilding, deletedRoom)))
+            .containsExactly("A101", "B101", "Z999");
+    }
+
+    @Test
+    void filtersStatus_pendingMeansNotPaid() {
+        Bill[] bills = {
+            bill().total(100.0).status("Paid"),
+            bill().total(200.0).status("Pending"),
+            bill().total(400.0).status("Overdue"),
+            bill().total(800.0).status(null),
+        };
+
+        assertAmount(summarize(status("Pending"), bills).totals().billed(), "1400");
+        assertAmount(summarize(status("Paid"), bills).totals().billed(), "100");
+        assertAmount(summarize(status("All"), bills).totals().billed(), "1500");
+    }
+
+    @Test
+    void search_matchesRoomOrTenantIgnoringCase() {
+        Bill a101 = bill().room("rm-A101", "A101").tenant("Malee");
+        Bill a102 = bill().room("rm-A102", "A102").tenant("Somchai");
+
+        assertThat(labels(summarize(search("a101"), a101, a102))).containsExactly("A101");
+        assertThat(labels(summarize(search("somchai"), a101, a102))).containsExactly("A102");
+    }
+
+    @Test
+    void search_matchesLeaseNameShownAsLabel() {
+        Summary summary = summarize(
+            new Filter(GroupBy.TENANT, null, null, null, null, "from lease"),
+            bill().lease("tenant-1", "From Lease").tenant("Tenant"));
+
+        assertThat(labels(summary)).containsExactly("From Lease");
+    }
+
+    @Test
+    void search_trimsAndTreatsBlankAsNoFilter() {
+        Bill a101 = bill().room("rm-A101", "A101");
+        Bill a102 = bill().room("rm-A102", "A102");
+
+        assertThat(labels(summarize(search("  A101 "), a101, a102))).containsExactly("A101");
+        assertThat(labels(summarize(search("   "), a101, a102))).containsExactly("A101", "A102");
+    }
+
+    @Test
+    void search_treatsPercentLiterally() {
+        Summary summary = summarize(search("%"), bill());
+
+        assertThat(summary.rows()).isEmpty();
+    }
+
+    @Test
+    void noMatches_returnsEmptyRowsAndZeroTotals() {
+        Summary summary = summarize(search("nobody"), bill());
+
+        assertThat(summary.rows()).isEmpty();
+        assertThat(summary.totals().billCount()).isZero();
+        assertAmount(summary.totals().billed(), "0");
+        assertAmount(summary.totals().paid(), "0");
+        assertAmount(summary.totals().outstanding(), "0");
+    }
+
+    @Test
+    void skippedBills_respectsOtherFilters() {
+        Summary summary = summarize(building("bld-1"),
+            bill().month("2026-08").building("bld-1"),
+            bill().month("2026-08").building("bld-2"));
+
+        assertThat(summary.skippedBills()).isEqualTo(1);
+    }
+
+    @Test
+    void skippedBills_countedWhenMonthRangeSet() {
+        Summary summary = summarize(monthRange(GroupBy.UNIT, "2026-01", "2026-02"), bill().month("2026-08"));
+
+        assertThat(summary.skippedBills()).isEqualTo(1);
+    }
+
+    @Test
+    void duplicateRoomMonths_countsPairs() {
+        Summary summary = summarize(GroupBy.UNIT,
+            bill().total(100.0),
+            bill().total(100.0),
+            bill().total(100.0),
+            bill().total(100.0).room("rm-A102", "A102"),
+            bill().total(100.0).room("rm-A102", "A102"),
+            bill().total(100.0).room("rm-A103", "A103"),
+            bill().total(100.0).month("September 2026"));
+
+        assertThat(summary.duplicateRoomMonths()).isEqualTo(2);
+        assertAmount(summary.totals().billed(), "700");
+    }
+
+    @Test
+    void duplicateRoomMonths_respectsFilters() {
+        Summary summary = summarize(monthRange(GroupBy.UNIT, "2026-08", "2026-08"),
+            bill(),
+            bill().month("September 2026"),
+            bill().month("September 2026"));
+
+        assertThat(summary.duplicateRoomMonths()).isZero();
     }
 
     @Test
