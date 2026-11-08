@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { UtilityBill, Room, Lease, RentQuote, BillPayment } from '../../types';
-import { getUtilityBills, saveUtilityBill, updateBillStatus, getRooms, getLeases, getRentQuote, getBillPayments, addBillPayment } from '../../services/api';
+import { getUtilityBills, saveUtilityBill, updateBillStatus, getRooms, getLeases, getRentQuote, getBillPayments, addBillPayment, getBillingSettings, saveBillingSettings } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import { currentBillingMonth, recentBillingMonths } from '../../utils/billingMonth';
-import { FileText, Plus, Printer, Droplets, Zap, Search, Building2, CreditCard, Upload, X } from 'lucide-react';
+import { FileText, Plus, Printer, Droplets, Zap, Search, Building2 } from 'lucide-react';
 import { ReceiptModal } from '../../components/admin/ReceiptModal';
+import { BillPaymentModal } from '../../components/admin/BillPaymentModal';
 import { BulkReceiptModal } from '../../components/admin/BulkReceiptModal';
 import { ScannedDocumentModal } from '../../components/admin/ScannedDocumentModal';
 import { useLanguage } from '../../context/LanguageContext';
@@ -28,6 +29,30 @@ const MONTH_NAMES = [
 
 const YEAR_OPTIONS = [2024, 2025, 2026, 2027, 2028, 2029, 2030];
 
+const leaseCoversBillingMonth = (lease: Lease, billingMonth: string) => {
+  const [monthName, yearText] = billingMonth.split(' ');
+  const monthIndex = MONTH_NAMES.findIndex(month => month.value === monthName);
+  const year = Number(yearText);
+  if (monthIndex < 0 || !Number.isFinite(year) || !['Active', 'Terminated'].includes(lease.status)) return false;
+
+  const monthStart = new Date(year, monthIndex, 1);
+  const nextMonthStart = new Date(year, monthIndex + 1, 1);
+  const checkIn = new Date(`${lease.checkInDate}T00:00:00`);
+  let leaseEnd = new Date(`${lease.checkOutDate}T00:00:00`);
+  if (lease.status === 'Terminated') {
+    if (!lease.terminatedDate) return false;
+    const dayAfterTermination = new Date(`${lease.terminatedDate}T00:00:00`);
+    dayAfterTermination.setDate(dayAfterTermination.getDate() + 1);
+    if (dayAfterTermination < leaseEnd) leaseEnd = dayAfterTermination;
+  }
+  return checkIn < nextMonthStart && leaseEnd > monthStart;
+};
+
+const leaseForRoomInMonth = (leases: Lease[], roomId: string, billingMonth: string) =>
+  leases
+    .filter(lease => lease.roomId === roomId && leaseCoversBillingMonth(lease, billingMonth))
+    .sort((a, b) => b.checkInDate.localeCompare(a.checkInDate))[0];
+
 export const UtilityReceiptManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const [searchParams] = useSearchParams();
@@ -38,6 +63,10 @@ export const UtilityReceiptManagement: React.FC = () => {
   const [leases, setLeases] = useState<Lease[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Unpaid' | 'Partial' | 'Paid'>('All');
+  const [selectedBillForPayment, setSelectedBillForPayment] = useState<UtilityBill | null>(null);
+  const [paymentHistory, setPaymentHistory] = useState<BillPayment[]>([]);
+  const [monthlyInterestRate, setMonthlyInterestRate] = useState(0);
+  const [savedInterestRate, setSavedInterestRate] = useState(0);
   const [monthFilter, setMonthFilter] = useState<string>('All');
   const [buildingFilter, setBuildingFilter] = useState<string>(initialBuildingId);
 
@@ -46,11 +75,6 @@ export const UtilityReceiptManagement: React.FC = () => {
   const [selectedBillIds, setSelectedBillIds] = useState<string[]>([]);
   const [showBulkPrintModal, setShowBulkPrintModal] = useState(false);
   const [scannedDocBill, setScannedDocBill] = useState<UtilityBill | null>(null);
-  const [paymentBill, setPaymentBill] = useState<UtilityBill | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentNote, setPaymentNote] = useState('');
-  const [paymentProof, setPaymentProof] = useState('');
-  const [paymentHistory, setPaymentHistory] = useState<BillPayment[]>([]);
 
   const handleToggleSelectAll = () => {
     if (selectedBillIds.length === filteredBills.length) {
@@ -97,9 +121,13 @@ export const UtilityReceiptManagement: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      setBills(await getUtilityBills());
-      setRooms(await getRooms());
-      setLeases(await getLeases());
+      const [billRows, roomRows, leaseRows] = await Promise.all([getUtilityBills(), getRooms(), getLeases()]);
+      setBills(billRows);
+      setRooms(roomRows);
+      setLeases(leaseRows);
+      const settings = await getBillingSettings();
+      setMonthlyInterestRate(settings.monthlyInterestRate);
+      setSavedInterestRate(settings.monthlyInterestRate);
     } catch (err) {
       console.error('Failed to fetch utility bills data:', err);
     }
@@ -121,8 +149,7 @@ export const UtilityReceiptManagement: React.FC = () => {
         setRentQuote(quote);
         // Name the tenant of the lease being billed, which may have ended, not whoever was shown last.
         const lease = leases.find(l => l.id === quote.leaseId);
-        const room = rooms.find(r => r.id === billFormData.roomId);
-        setBillFormData(prev => ({ ...prev, tenantName: lease?.tenantName || room?.currentTenantName || 'Tenant' }));
+        setBillFormData(prev => ({ ...prev, tenantName: lease?.tenantName || '' }));
       })
       .catch((err: Error) => {
         if (!stale) setRentQuoteError(err.message);
@@ -133,18 +160,25 @@ export const UtilityReceiptManagement: React.FC = () => {
   }, [showBillModal, billFormData.roomId, billFormData.billingMonth]);
 
   const handleOpenNewBillModal = () => {
-    const activeLease = leases.find(l => l.status === 'Active');
-    const targetRoom = rooms.find(r => r.id === activeLease?.roomId) || rooms[0];
+    setRentQuote(null);
+    setRentQuoteError('');
+    setMonthlyInterestRate(savedInterestRate);
+    const billingMonth = currentBillingMonth();
+    const eligibleRooms = rooms.filter(room => leaseForRoomInMonth(leases, room.id, billingMonth));
+    const targetRoom = eligibleRooms[0];
+    const lease = targetRoom ? leaseForRoomInMonth(leases, targetRoom.id, billingMonth) : undefined;
+    const prevWaterMeter = targetRoom?.currWaterMeter || targetRoom?.prevWaterMeter || 100;
+    const prevElectricMeter = targetRoom?.currElectricMeter || targetRoom?.prevElectricMeter || 400;
 
     setBillFormData({
-      billingMonth: currentBillingMonth(),
+      billingMonth,
       roomId: targetRoom?.id || '',
       roomNumber: targetRoom?.roomNumber || '',
-      tenantName: activeLease?.tenantName || targetRoom?.currentTenantName || 'Tenant',
-      prevWaterMeter: targetRoom?.currWaterMeter || targetRoom?.prevWaterMeter || 100,
-      currWaterMeter: (targetRoom?.currWaterMeter || targetRoom?.prevWaterMeter || 100) + 8,
-      prevElectricMeter: targetRoom?.currElectricMeter || targetRoom?.prevElectricMeter || 400,
-      currElectricMeter: (targetRoom?.currElectricMeter || targetRoom?.prevElectricMeter || 400) + 90,
+      tenantName: lease?.tenantName || '',
+      prevWaterMeter,
+      currWaterMeter: prevWaterMeter + 8,
+      prevElectricMeter,
+      currElectricMeter: prevElectricMeter + 90,
       waterRate: 9,
       electricRate: 4,
       commonFee: 300,
@@ -154,26 +188,32 @@ export const UtilityReceiptManagement: React.FC = () => {
 
   const handleRoomSelectInBill = (roomId: string) => {
     const rm = rooms.find(r => r.id === roomId);
-    const lease = leases.find(l => l.roomId === roomId && l.status === 'Active');
+    if (!rm) return;
+    const lease = leaseForRoomInMonth(leases, roomId, billFormData.billingMonth || currentBillingMonth());
+    if (!lease) return;
 
-    if (rm) {
-      setBillFormData(prev => ({
-        ...prev,
-        roomId: rm.id,
-        roomNumber: rm.roomNumber,
-        tenantName: lease?.tenantName || rm.currentTenantName || 'Tenant',
-        prevWaterMeter: rm.currWaterMeter || rm.prevWaterMeter || 100,
-        currWaterMeter: (rm.currWaterMeter || rm.prevWaterMeter || 100) + 8,
-        prevElectricMeter: rm.currElectricMeter || rm.prevElectricMeter || 400,
-        currElectricMeter: (rm.currElectricMeter || rm.prevElectricMeter || 400) + 90,
-      }));
-    }
+    const prevWaterMeter = rm.currWaterMeter || rm.prevWaterMeter || 100;
+    const prevElectricMeter = rm.currElectricMeter || rm.prevElectricMeter || 400;
+    setBillFormData(prev => ({
+      ...prev,
+      roomId: rm.id,
+      roomNumber: rm.roomNumber,
+      tenantName: lease.tenantName,
+      prevWaterMeter,
+      currWaterMeter: prevWaterMeter + 8,
+      prevElectricMeter,
+      currElectricMeter: prevElectricMeter + 90,
+    }));
   };
 
   const handleSaveBill = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!rentQuote) return;
+    if (!rentQuote || rentQuote.source !== 'LEASE' || !billFormData.roomId) return;
     try {
+      if (monthlyInterestRate !== savedInterestRate) {
+        const saved = await saveBillingSettings(monthlyInterestRate);
+        setSavedInterestRate(saved.monthlyInterestRate);
+      }
       await saveUtilityBill(billFormData);
       toast.success('Utility bill calculated and saved successfully');
       setShowBillModal(false);
@@ -183,23 +223,27 @@ export const UtilityReceiptManagement: React.FC = () => {
     }
   };
 
-  const openPaymentModal = async (bill: UtilityBill) => {
-    setPaymentBill(bill);
-    setPaymentAmount(String(Math.max(0, (bill.totalAmount || 0) - (bill.paidAmount || 0))));
-    setPaymentNote('');
-    setPaymentProof('');
-    try { setPaymentHistory(await getBillPayments(bill.id)); } catch { setPaymentHistory([]); }
+  const handleOpenPaymentModal = async (bill: UtilityBill) => {
+    setSelectedBillForPayment(bill);
+    setPaymentHistory([]);
+    try {
+      setPaymentHistory(await getBillPayments(bill.id));
+    } catch {
+      setPaymentHistory([]);
+    }
   };
 
-  const handleRecordPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!paymentBill) return;
+  const handleRecordPayment = async (amount: number, note?: string, proofImage?: string) => {
+    if (!selectedBillForPayment) return;
     try {
-      await addBillPayment(paymentBill.id, { amount: Number(paymentAmount), note: paymentNote || undefined, proofImage: paymentProof || undefined });
-      toast.success(language === 'th' ? 'บันทึกการชำระเงินแล้ว' : 'Payment recorded');
-      setPaymentBill(null);
-      await fetchData();
-    } catch (err) { toast.error((err as Error).message); }
+      const result = await addBillPayment(selectedBillForPayment.id, { amount, note, proofImage });
+      setBills(prev => prev.map(bill => bill.id === result.bill.id ? result.bill : bill));
+      setSelectedBillForPayment(null);
+      setPaymentHistory([]);
+      toast.success(language === 'th' ? 'บันทึกรับชำระแล้ว' : 'Payment recorded');
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   };
 
   const waterUnitsPreview = Math.max(0, (billFormData.currWaterMeter || 0) - (billFormData.prevWaterMeter || 0));
@@ -207,6 +251,26 @@ export const UtilityReceiptManagement: React.FC = () => {
   const waterAmtPreview = waterUnitsPreview * (billFormData.waterRate || 9);
   const electricAmtPreview = electricUnitsPreview * (billFormData.electricRate || 4);
   const totalAmtPreview = (rentQuote?.rentAmount || 0) + waterAmtPreview + electricAmtPreview + (billFormData.commonFee || 0);
+
+  const monthIndex = (value: string) => {
+    const [month, year] = value.split(' ');
+    return Number(year) * 12 + MONTH_NAMES.findIndex(item => item.value === month);
+  };
+  const latestBillIds = new Set(Array.from(bills.reduce((latest, bill) => {
+    const key = bill.roomId || bill.roomNumber;
+    const current = latest.get(key);
+    if (!current || monthIndex(bill.billingMonth) > monthIndex(current.billingMonth)) latest.set(key, bill);
+    return latest;
+  }, new Map<string, UtilityBill>()).values()).map(bill => bill.id));
+
+  const previousBillForDraft = bills
+    .filter(b => b.roomId === billFormData.roomId && monthIndex(b.billingMonth) < monthIndex(billFormData.billingMonth || ''))
+    .sort((a, b) => monthIndex(b.billingMonth) - monthIndex(a.billingMonth))[0];
+  const carryForwardPreview = previousBillForDraft
+    ? Math.max(0, previousBillForDraft.balanceDue ?? ((previousBillForDraft.amountDue ?? previousBillForDraft.totalAmount ?? 0) - (previousBillForDraft.paidAmount || 0)))
+    : 0;
+  const interestPreview = Math.round(carryForwardPreview * monthlyInterestRate) / 100;
+  const amountDuePreview = totalAmtPreview + carryForwardPreview + interestPreview;
 
   const availableMonths = Array.from(new Set([...recentBillingMonths(3), ...bills.map(b => b.billingMonth)])).filter((m): m is string => Boolean(m));
 
@@ -246,12 +310,14 @@ export const UtilityReceiptManagement: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenNewBillModal}
-          className="px-4 py-2.5 text-xs font-semibold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-sm"
-        >
-          <Plus className="w-4 h-4" /> {t('util.newBill')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleOpenNewBillModal}
+            className="px-4 py-2.5 text-xs font-semibold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-sm"
+          >
+            <Plus className="w-4 h-4" /> {t('util.newBill').replace(/^\+\s*/, '')}
+          </button>
+        </div>
       </div>
 
       {/* METRICS SUMMARY */}
@@ -265,7 +331,7 @@ export const UtilityReceiptManagement: React.FC = () => {
         <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card p-5 rounded-2xl">
           <span className="text-xs text-nike-mute dark:text-nike-stone font-medium">{t('util.pending')}</span>
           <span className="text-3xl font-bold text-amber-600 dark:text-amber-400 block mt-1">
-            {bills.filter(b => b.status !== 'Paid').length} {language === 'th' ? 'บิลค้าง' : 'outstanding bills'}
+            {bills.filter(b => b.status !== 'Paid').length} {language === 'th' ? 'บิล' : 'bills'}
           </span>
         </div>
         <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card p-5 rounded-2xl">
@@ -439,25 +505,26 @@ export const UtilityReceiptManagement: React.FC = () => {
                       <span className="block text-[11px] text-nike-stone">({formatCurrency(bill.electricAmount)})</span>
                     </td>
                     <td className="p-3 font-bold text-nike-ink dark:text-white text-sm">
-                      {formatCurrency(bill.totalAmount)}
-                      <span className="block text-[10px] font-medium text-emerald-600">{language === 'th' ? 'จ่ายแล้ว' : 'Paid'}: {formatCurrency(bill.paidAmount || 0)}</span>
-                      <span className="block text-[10px] font-medium text-rose-600">{language === 'th' ? 'คงเหลือ' : 'Due'}: {formatCurrency(Math.max(0, bill.totalAmount - (bill.paidAmount || 0)))}</span>
+                      {formatCurrency(bill.amountDue ?? bill.totalAmount)}
+                      {(bill.balanceForwardAmount || 0) > 0 && <span className="block text-[11px] font-medium text-slate-500">{language === 'th' ? `รวมยอดค้าง ${formatCurrency(bill.balanceForwardAmount)}` : `Includes ${formatCurrency(bill.balanceForwardAmount)} carried forward`}</span>}
+                      {(bill.interestAmount || 0) > 0 && <span className="block text-[11px] font-medium text-slate-500">{language === 'th' ? `ดอกเบี้ย ${formatCurrency(bill.interestAmount)} (${bill.interestRate || 0}%/เดือน)` : `Interest ${formatCurrency(bill.interestAmount)} (${bill.interestRate || 0}%/mo)`}</span>}
+                      {(bill.status === 'Partial' || (bill.paidAmount || 0) > 0) && <span className="block text-[11px] font-medium text-amber-700 dark:text-amber-300">{language === 'th' ? 'คงค้าง' : 'Remaining'}: {formatCurrency(bill.balanceDue ?? 0)}</span>}
                     </td>
                     <td className="p-3">
-                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
-                          bill.status === 'Paid'
-                            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                            : bill.status === 'Partial'
-                              ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-                              : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                        }`}
-                      >
-                        {bill.status === 'Paid' ? t('status.paid') : bill.status === 'Partial' ? (language === 'th' ? 'จ่ายบางส่วน' : 'Partial') : t('status.unpaid')}
-                      </span>
+                      <div className="flex flex-col items-start gap-1.5">
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
+                          bill.status === 'Paid' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                            : bill.status === 'Partial' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+                            : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                        }`}>
+                          {bill.status === 'Paid' ? t('status.paid') : bill.status === 'Partial' ? (language === 'th' ? 'จ่ายบางส่วน' : 'Partially paid') : t('status.unpaid')}
+                        </span>
+                        {bill.status !== 'Paid' && latestBillIds.has(bill.id) && <button type="button" onClick={() => void handleOpenPaymentModal(bill)} className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">{language === 'th' ? 'รับชำระ' : 'Record payment'}</button>}
+                        {bill.status !== 'Paid' && !latestBillIds.has(bill.id) && <span className="text-[10px] text-slate-500">{language === 'th' ? 'ยอดยกไปบิลล่าสุดแล้ว' : 'Rolled into latest bill'}</span>}
+                      </div>
                     </td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {bill.status !== 'Paid' && <button type="button" onClick={() => void openPaymentModal(bill)} className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center gap-1"><CreditCard className="w-3.5 h-3.5" />{language === 'th' ? 'รับชำระ' : 'Record payment'}</button>}
                         <button
                           type="button"
                           onClick={() => setScannedDocBill(bill)}
@@ -514,12 +581,21 @@ export const UtilityReceiptManagement: React.FC = () => {
                     onChange={(e) => handleRoomSelectInBill(e.target.value)}
                     className="w-full p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white focus:outline-none transition-all cursor-pointer font-medium"
                   >
-                    {rooms.map(r => (
-                      <option key={r.id} value={r.id}>
-                        {t('common.unit')} {r.roomNumber} ({r.currentTenantName || (language === 'th' ? 'ไม่มีผู้เช่า' : 'No Tenant')})
-                      </option>
-                    ))}
+                    <option value="" disabled>
+                      {language === 'th' ? 'เลือกห้องที่มีผู้เช่าในงวดนี้' : 'Select a unit with a tenant for this month'}
+                    </option>
+                    {rooms.map(r => {
+                      const lease = leaseForRoomInMonth(leases, r.id, billFormData.billingMonth || currentBillingMonth());
+                      return (
+                        <option key={r.id} value={r.id} disabled={!lease}>
+                          {t('common.unit')} {r.roomNumber} ({lease?.tenantName || (language === 'th' ? 'ไม่มีผู้เช่าในงวดนี้' : 'No tenant this month')})
+                        </option>
+                      );
+                    })}
                   </select>
+                  <p className="mt-1 text-[10px] text-nike-mute dark:text-nike-stone">
+                    {language === 'th' ? 'เลือกได้เฉพาะห้องที่มีสัญญาเช่าครอบคลุมงวดเดือนนี้' : 'Only units with a lease covering this billing month can be billed.'}
+                  </p>
                 </div>
 
                 <div className="sm:col-span-1">
@@ -707,10 +783,55 @@ export const UtilityReceiptManagement: React.FC = () => {
                   <span>{language === 'th' ? 'ค่าส่วนกลาง:' : 'Common Fee:'}</span>
                   <span className="font-semibold text-nike-ink dark:text-white">{formatCurrency(billFormData.commonFee || 300)}</span>
                 </div>
+                {carryForwardPreview > 0 ? (
+                  <div className="mt-2 rounded-lg border border-amber-300/70 dark:border-amber-700/60 bg-amber-50/70 dark:bg-amber-950/20 p-3 space-y-2">
+                    <div className="flex justify-between font-semibold text-amber-800 dark:text-amber-300">
+                      <span>{language === 'th' ? 'ยอดค้างจากบิลก่อน' : 'Previous outstanding balance'}</span>
+                      <span>{formatCurrency(carryForwardPreview)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 text-nike-mute">
+                      <label htmlFor="bill-interest-rate" className="font-medium">
+                        {language === 'th' ? 'ดอกเบี้ยหนี้ค้าง (%/เดือน)' : 'Overdue interest (%/month)'}
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          id="bill-interest-rate"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={monthlyInterestRate}
+                          onChange={e => setMonthlyInterestRate(Number(e.target.value))}
+                          className="w-24 rounded-lg border border-nike-hairline dark:border-nike-dark-card bg-white dark:bg-nike-dark-surface px-2 py-1.5 text-right font-semibold text-nike-ink dark:text-white"
+                        />
+                        <span>%</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-nike-mute">
+                      <span>{language === 'th' ? 'ดอกเบี้ยของบิลนี้' : 'Interest on this bill'}</span>
+                      <span className="font-semibold">{formatCurrency(interestPreview)}</span>
+                    </div>
+                    <p className="text-[10px] leading-relaxed text-nike-mute dark:text-nike-stone">
+                      {language === 'th'
+                        ? 'อัตรานี้จะบันทึกเมื่อสร้างบิล และไม่มีผลย้อนหลังต่อบิลเดิม'
+                        : 'This rate is saved when the bill is created and does not change previous bills.'}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="pt-2 text-[11px] text-nike-mute dark:text-nike-stone">
+                    {language === 'th' ? 'ไม่มีหนี้ค้างจากบิลก่อน จึงไม่มีดอกเบี้ยในบิลนี้' : 'No previous balance, so no interest is charged on this bill.'}
+                  </p>
+                )}
                 <div className="flex justify-between pt-2 border-t border-nike-hairline dark:border-nike-dark-card font-bold text-sm text-nike-ink dark:text-white">
-                  <span>{language === 'th' ? 'ยอดรวมสุทธิ:' : 'Grand Total:'}</span>
-                  <span className="text-emerald-600 dark:text-emerald-400">{formatCurrency(totalAmtPreview)}</span>
+                  <span>{language === 'th' ? 'ยอดรวมสุทธิ:' : 'Current month total:'}</span>
+                  <span>{formatCurrency(totalAmtPreview)}</span>
                 </div>
+                {carryForwardPreview > 0 && (
+                  <div className="flex justify-between font-bold text-sm text-nike-ink dark:text-white">
+                    <span>{language === 'th' ? 'ยอดต้องชำระรวมยอดค้างและดอกเบี้ย:' : 'Total due including balance and interest:'}</span>
+                    <span className="text-emerald-600 dark:text-emerald-400">{formatCurrency(amountDuePreview)}</span>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -718,14 +839,14 @@ export const UtilityReceiptManagement: React.FC = () => {
             <div className="flex justify-end gap-2 pt-2 border-t border-nike-hairline dark:border-nike-dark-card">
               <button
                 type="button"
-                onClick={() => setShowBillModal(false)}
+                onClick={() => { setMonthlyInterestRate(savedInterestRate); setShowBillModal(false); }}
                 className="px-4 py-2 text-xs font-medium rounded-xl bg-nike-soft-cloud dark:bg-nike-dark-card text-nike-ink dark:text-white cursor-pointer"
               >
                 {language === 'th' ? 'ยกเลิก' : 'Cancel'}
               </button>
               <button
                 type="submit"
-                disabled={!rentQuote}
+                disabled={!rentQuote || !Number.isFinite(monthlyInterestRate) || monthlyInterestRate < 0 || monthlyInterestRate > 100}
                 className="px-4 py-2 text-xs font-semibold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {language === 'th' ? 'บันทึกและสร้างบิล' : 'Save & Generate Bill'}
@@ -735,39 +856,8 @@ export const UtilityReceiptManagement: React.FC = () => {
         </div>
       )}
 
-      {paymentBill && (
-        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <form onSubmit={handleRecordPayment} className="bg-white dark:bg-nike-dark-elevated border border-slate-200 dark:border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl my-8">
-            <div className="flex justify-between items-start">
-              <div><h3 className="text-lg font-bold text-nike-ink dark:text-white">{language === 'th' ? 'บันทึกการชำระเงิน' : 'Record Payment'}</h3>
-                <p className="text-xs text-slate-500">{paymentBill.invoiceNo} · {language === 'th' ? 'ห้อง' : 'Unit'} {paymentBill.roomNumber}</p></div>
-              <button type="button" onClick={() => setPaymentBill(null)} aria-label="Close"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 text-sm space-y-1">
-              <div className="flex justify-between"><span>{language === 'th' ? 'ยอดบิล' : 'Bill total'}</span><strong>{formatCurrency(paymentBill.totalAmount)}</strong></div>
-              <div className="flex justify-between"><span>{language === 'th' ? 'ชำระแล้ว' : 'Already paid'}</span><strong>{formatCurrency(paymentBill.paidAmount || 0)}</strong></div>
-              <div className="flex justify-between text-rose-600"><span>{language === 'th' ? 'ยอดคงเหลือ' : 'Outstanding'}</span><strong>{formatCurrency(paymentBill.totalAmount - (paymentBill.paidAmount || 0))}</strong></div>
-            </div>
-            <label className="block text-xs font-semibold">{language === 'th' ? 'ยอดที่รับชำระ *' : 'Amount received *'}
-              <input type="number" min="0.01" step="0.01" max={paymentBill.totalAmount - (paymentBill.paidAmount || 0)} required value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} className="mt-1 w-full rounded-xl border p-2.5 bg-white dark:bg-slate-800" />
-            </label>
-            <label className="block text-xs font-semibold">{language === 'th' ? 'หมายเหตุ (ไม่บังคับ)' : 'Note (optional)'}
-              <input value={paymentNote} onChange={e => setPaymentNote(e.target.value)} className="mt-1 w-full rounded-xl border p-2.5 bg-white dark:bg-slate-800" />
-            </label>
-            <label className="block text-xs font-semibold">{language === 'th' ? 'แนบสลิป (ไม่บังคับ, สูงสุด 5 MB)' : 'Payment proof (optional, max 5 MB)'}
-              <span className="mt-1 flex items-center gap-2 rounded-xl border p-2.5 text-slate-500"><Upload className="w-4 h-4" /><input type="file" accept="image/*,application/pdf" onChange={e => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                if (file.size > 5 * 1024 * 1024) { toast.error(language === 'th' ? 'ไฟล์ต้องมีขนาดไม่เกิน 5 MB' : 'File must be 5 MB or smaller'); e.target.value = ''; return; }
-                const reader = new FileReader(); reader.onload = () => setPaymentProof(String(reader.result || '')); reader.readAsDataURL(file);
-              }} className="w-full text-xs" /></span>
-            </label>
-            {paymentHistory.length > 0 && <div className="border-t pt-3 space-y-2"><h4 className="text-xs font-bold">{language === 'th' ? 'ประวัติการชำระ' : 'Payment history'}</h4>
-              {paymentHistory.map(p => <div key={p.id} className="flex justify-between text-xs text-slate-600"><span>{new Date(p.paymentDate).toLocaleString()} {p.note ? `· ${p.note}` : ''} {p.proofImage ? <a href={p.proofImage} target="_blank" rel="noreferrer" className="text-blue-600 underline">{language === 'th' ? 'หลักฐาน' : 'Proof'}</a> : null}</span><strong>{formatCurrency(p.amount)}</strong></div>)}
-            </div>}
-            <div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setPaymentBill(null)} className="rounded-xl border px-4 py-2 text-sm">{language === 'th' ? 'ยกเลิก' : 'Cancel'}</button><button type="submit" className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">{language === 'th' ? 'บันทึกยอดชำระ' : 'Save payment'}</button></div>
-          </form>
-        </div>
+      {selectedBillForPayment && (
+        <BillPaymentModal bill={selectedBillForPayment} payments={paymentHistory} onClose={() => { setSelectedBillForPayment(null); setPaymentHistory([]); }} onSubmit={handleRecordPayment} />
       )}
 
       {/* PRINTABLE RECEIPT MODAL */}

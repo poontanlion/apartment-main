@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-/** Decides the rent of a bill: the lease in effect during the month, otherwise the room's price for that month. */
+/** Resolves the tenant and rent for a billing month. A bill requires a lease covering that month. */
 @Service
 public class RentQuoteService {
 
@@ -46,7 +46,6 @@ public class RentQuoteService {
         Room room = Optional.ofNullable(roomId).flatMap(rooms::findById)
                 .orElseThrow(() -> new PriceRuleException(HttpStatus.BAD_REQUEST, "ROOM_NOT_FOUND", "Room not found."));
 
-        // No proration, so one lease sets the whole month. A renewal in that month takes over from the old lease.
         Optional<Lease> lease = leases.findByRoomIdAndStatusIn(roomId, List.of("Active", "Terminated")).stream()
                 .filter(l -> l.getRentAmount() != null && covers(l, month))
                 .max(Comparator.comparing(Lease::getCheckInDate));
@@ -54,11 +53,17 @@ public class RentQuoteService {
             return new RentQuote(lease.get().getRentAmount(), "LEASE", lease.get().getId());
         }
 
-        Double price = prices.priceFor(room, month);
-        if (price == null) {
-            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "RENT_UNAVAILABLE", "This room has no price for that month.");
+        Double roomPrice = prices.priceFor(room, month);
+        if (roomPrice == null) {
+            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "RENT_UNAVAILABLE", "No rent price is configured for this room and month.");
         }
-        return new RentQuote(price, "ROOM_PRICE", null);
+        return new RentQuote(roomPrice, "ROOM_PRICE", null);
+    }
+
+    public boolean hasTenantForBillingMonth(String roomId, YearMonth month) {
+        if (roomId == null || rooms.findById(roomId).isEmpty()) return false;
+        return leases.findByRoomIdAndStatusIn(roomId, List.of("Active", "Terminated")).stream()
+                .anyMatch(lease -> covers(lease, month));
     }
 
     private static boolean covers(Lease lease, YearMonth month) {

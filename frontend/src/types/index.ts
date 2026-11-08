@@ -143,7 +143,12 @@ export interface UtilityBill {
   electricAmount: number;
   commonFee: number;
   totalAmount: number;
-  paidAmount: number;
+  balanceForwardAmount?: number;
+  interestRate?: number;
+  interestAmount?: number;
+  amountDue?: number;
+  paidAmount?: number;
+  balanceDue?: number;
   status: BillStatus;
   paymentDate?: string;
   slipImage?: string;

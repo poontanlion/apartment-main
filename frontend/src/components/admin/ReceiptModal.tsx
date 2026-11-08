@@ -79,7 +79,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ bill, onClose }) => 
             </div>
             <div className="text-right">
               <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 font-extrabold text-xs rounded-md border border-emerald-300 print:border-black print:bg-gray-100 print:text-black">
-                {bill.status === 'Paid' ? 'OFFICIAL RECEIPT' : bill.status === 'Partial' ? 'PARTIALLY PAID INVOICE' : 'UTILITY INVOICE'}
+                {bill.status === 'Paid' ? 'OFFICIAL RECEIPT' : 'UTILITY INVOICE'}
               </span>
               <p className="text-slate-700 print:text-black mt-1 text-[11px]">Invoice No: <strong className="font-extrabold">{bill.invoiceNo}</strong></p>
               <p className="text-slate-700 print:text-black text-[11px]">Billing Month: <strong className="font-extrabold">{bill.billingMonth}</strong></p>
@@ -102,7 +102,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ bill, onClose }) => 
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Payment Status:</span>
-              <span className="font-extrabold text-emerald-600 print:text-black text-xs">{bill.status === 'Paid' ? `Paid${bill.paymentDate ? ` (${formatDate(bill.paymentDate)})` : ''}` : bill.status === 'Partial' ? 'Partially paid' : 'Unpaid'}</span>
+              <span className="font-extrabold text-emerald-600 print:text-black text-xs">{bill.paymentDate ? `Paid (${formatDate(bill.paymentDate)})` : bill.status}</span>
             </div>
           </div>
 
@@ -153,18 +153,16 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ bill, onClose }) => 
                   <td className="border border-slate-300 p-2 print:py-1.5 text-right font-extrabold">{formatCurrency(bill.commonFee)}</td>
                 </tr>
               )}
-              {(bill.paidAmount || 0) > 0 && (
-                <tr>
-                  <td colSpan={5} className="border border-slate-300 p-2 print:py-1.5 text-right font-semibold">Amount Paid</td>
-                  <td className="border border-slate-300 p-2 print:py-1.5 text-right font-extrabold">-{formatCurrency(bill.paidAmount)}</td>
-                </tr>
-              )}
             </tbody>
             <tfoot>
+              {(bill.balanceForwardAmount || 0) > 0 && <tr><td colSpan={5} className="border border-slate-300 p-2 text-right font-semibold">Previous balance carried forward</td><td className="border border-slate-300 p-2 text-right font-bold">{formatCurrency(bill.balanceForwardAmount)}</td></tr>}
+              {(bill.interestAmount || 0) > 0 && <tr><td colSpan={5} className="border border-slate-300 p-2 text-right font-semibold">Interest</td><td className="border border-slate-300 p-2 text-right font-bold">{formatCurrency(bill.interestAmount)}</td></tr>}
               <tr className="bg-slate-100 print:bg-gray-100 text-slate-900 print:text-black font-extrabold text-xs">
-                <td colSpan={5} className="border border-slate-300 p-2.5 print:py-2 text-right uppercase tracking-wider">BALANCE DUE:</td>
-                <td className="border border-slate-300 p-2.5 print:py-2 text-right text-emerald-600 print:text-black font-extrabold text-sm">{formatCurrency(Math.max(0, bill.totalAmount - (bill.paidAmount || 0)))}</td>
+                <td colSpan={5} className="border border-slate-300 p-2.5 print:py-2 text-right uppercase tracking-wider">TOTAL DUE:</td>
+                <td className="border border-slate-300 p-2.5 print:py-2 text-right text-emerald-600 print:text-black font-extrabold text-sm">{formatCurrency(bill.amountDue ?? bill.totalAmount)}</td>
               </tr>
+              {(bill.paidAmount || 0) > 0 && <tr><td colSpan={5} className="border border-slate-300 p-2 text-right font-semibold">Paid to date</td><td className="border border-slate-300 p-2 text-right font-bold">{formatCurrency(bill.paidAmount)}</td></tr>}
+              {(bill.balanceDue ?? 0) > 0 && <tr><td colSpan={5} className="border border-slate-300 p-2 text-right font-semibold">Remaining balance</td><td className="border border-slate-300 p-2 text-right font-bold">{formatCurrency(bill.balanceDue)}</td></tr>}
             </tfoot>
           </table>
 

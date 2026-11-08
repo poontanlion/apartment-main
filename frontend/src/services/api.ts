@@ -211,6 +211,14 @@ export const saveUtilityBill = async (billData: Partial<UtilityBill>): Promise<U
   });
 };
 
+export const getBillingSettings = (): Promise<{ id: string; monthlyInterestRate: number }> =>
+  fetchJson<{ id: string; monthlyInterestRate: number }>(`${API_BASE}/billing-settings`);
+
+export const saveBillingSettings = (monthlyInterestRate: number): Promise<{ id: string; monthlyInterestRate: number }> =>
+  fetchJson<{ id: string; monthlyInterestRate: number }>(`${API_BASE}/billing-settings`, {
+    method: 'PUT', body: JSON.stringify({ monthlyInterestRate }),
+  });
+
 export const updateBillStatus = async (billId: string, status: BillStatus, slipImage?: string, scannedDocument?: string): Promise<UtilityBill | null> => {
   try {
     return await fetchJson<UtilityBill>(`${API_BASE}/utility-bills/${billId}/status`, {
