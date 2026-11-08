@@ -212,7 +212,7 @@ test('set, edit, confirm cancellation, and see the reminder in the existing tab'
   await page.goto('/admin/maintenance?tab=predictions&roomId=rm-A101&keep=1');
   await tab(page).getByRole('button', { name: 'Set appointment' }).first().click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByLabel('Appointment date')).toHaveValue('2026-11-07');
+  await expect(dialog.getByLabel('Appointment date')).toHaveValue('2026-11-08');
   await expect(dialog.getByLabel('Appointment date')).toHaveAttribute('min', '2026-11-08');
   await dialog.getByLabel('Appointment date').fill('2026-11-20');
   await dialog.getByRole('button', { name: 'Confirm appointment', exact: true }).click();
@@ -296,4 +296,76 @@ test('mobile dark appointment modal fits the viewport', async ({ page }) => {
   const box = await dialog.boundingBox();
   expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.width).toBeLessThanOrEqual(390); expect(box!.height).toBeLessThanOrEqual(700);
   await page.screenshot({ path: 'test-results/appointment-mobile-dark.png', fullPage: true });
+});
+
+test('dashboard reads one summary, links to combined statuses, and never posts refresh', async ({ page }) => {
+  const state = await setup(page);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/admin/dashboard');
+  const card = page.getByRole('region', { name: 'Upcoming maintenance' });
+  await expect(card.getByRole('link', { name: 'Overdue 1', exact: true })).toBeVisible();
+  await expect(card.getByRole('link', { name: 'Within 7 days 2', exact: true })).toBeVisible();
+  await expect(card.getByRole('link', { name: 'Within 30 days 4', exact: true })).toBeVisible();
+  expect(state.get).toBe(1); expect(state.refresh).toBe(0);
+  await page.screenshot({ path: 'test-results/predictions-dashboard.png', fullPage: true });
+  await card.getByRole('link', { name: 'Within 30 days 4', exact: true }).click();
+  await expect(page).toHaveURL(/tab=predictions&status=due_soon%2Cwithin_30/);
+  await expect(tab(page).getByText('Showing 1–4 of 4 items')).toBeVisible();
+  await expect(tab(page).getByRole('button', { name: /^Within 30 days/ })).toContainText('4');
+  expect(errors).toEqual([]);
+});
+
+for (const code of [401, 403, 500]) test(`dashboard HTTP ${code} stays isolated from other widgets`, async ({ page }) => {
+  const state = await setup(page, { denial: code });
+  await page.goto('/admin/dashboard');
+  const card = page.getByRole('region', { name: 'Upcoming maintenance' });
+  await expect(card.getByRole('alert')).toContainText(code === 500 ? 'Unable to load' : 'Please sign in again');
+  await expect(page.getByRole('heading', { name: 'Apartment Operations Command Center', exact: true })).toBeVisible();
+  await expect(page.getByText('Total Units', { exact: true })).toBeVisible();
+  expect(state.get).toBe(1); expect(state.refresh).toBe(0);
+});
+
+test('empty dashboard shows a link without calling refresh', async ({ page }) => {
+  const state = await setup(page, { empty: true });
+  await page.goto('/admin/dashboard');
+  const card = page.getByRole('region', { name: 'Upcoming maintenance' });
+  await expect(card.getByText('No maintenance prediction data yet')).toBeVisible();
+  await expect(card.getByRole('link', { name: 'View maintenance predictions' })).toHaveAttribute('href', '/admin/maintenance?tab=predictions');
+  expect(state.get).toBe(1); expect(state.refresh).toBe(0);
+});
+
+test('overdue prediction modal starts with Bangkok today', async ({ page }) => {
+  await setup(page);
+  await page.goto('/admin/maintenance?tab=predictions&roomId=rm-A101');
+  await tab(page).getByRole('button', { name: 'Set appointment' }).first().click();
+  await expect(page.getByRole('dialog').getByLabel('Appointment date')).toHaveValue('2026-11-08');
+  await expect(page.getByRole('dialog').getByLabel('Appointment date')).toHaveAttribute('min', '2026-11-08');
+});
+
+test('dashboard maintenance card supports Thai, dark mode, and a mobile viewport', async ({ page }) => {
+  await setup(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => { localStorage.setItem('vr_lang', 'th'); localStorage.setItem('vr_theme', 'dark'); });
+  await page.goto('/admin/dashboard');
+  const card = page.getByRole('region', { name: 'งานบำรุงรักษาใกล้ถึงกำหนด' });
+  await expect(card.getByRole('link', { name: 'ภายใน 30 วัน 4', exact: true })).toBeVisible();
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  const bounds = await card.boundingBox();
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(await card.innerText()).not.toContain('mnt.predictions.');
+  await card.screenshot({ path: 'test-results/predictions-dashboard-mobile-thai-dark.png' });
+});
+
+test('the existing notification center opens predictions for a digest', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/notifications', route => route.fulfill({ json: [{
+    id: 'notif-digest', userId: 'admin@example.com', title: 'Maintenance Predictions Daily Digest',
+    message: 'Overdue: 1 items; due soon (within 7 days): 2 items. View maintenance predictions: /admin/maintenance?tab=predictions',
+    type: 'warning', isRead: false, createdAt: '2026-11-08T01:00:00',
+  }] }));
+  await page.goto('/admin/notifications');
+  await page.getByText('Maintenance Predictions Daily Digest', { exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/maintenance\?tab=predictions/);
+  await expect(tab(page).getByText('Showing 1–20 of 25 items')).toBeVisible();
 });

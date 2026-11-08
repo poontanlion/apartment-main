@@ -10,8 +10,14 @@ export const bangkokToday = (now: Date = new Date()): string => {
   return `${value('year')}-${value('month')}-${value('day')}`;
 };
 
-export const initialAppointmentDate = (row: Pick<MaintenancePredictionRow, 'hasAppointment' | 'appointmentDate' | 'predictedDate'>): string =>
-  (row.hasAppointment ? row.appointmentDate : row.predictedDate) || '';
+export const initialAppointmentDate = (
+  row: Pick<MaintenancePredictionRow, 'hasAppointment' | 'appointmentDate' | 'predictedDate'>,
+  today: string = bangkokToday(),
+): string => {
+  if (row.hasAppointment) return row.appointmentDate || '';
+  const date = row.predictedDate || '';
+  return date && date < today ? today : date;
+};
 
 export const validAppointmentDate = (date: string, today: string): boolean =>
   formatDateDMY(date) !== '—' && date >= today;

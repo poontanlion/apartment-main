@@ -10,13 +10,19 @@ describe('Bangkok appointment date policy', () => {
   it.each([['2026-11-07', false], ['2026-11-08', true], ['2026-11-09', true], ['', false], ['2027-02-30', false]])
     ('validates %s against Bangkok today', (date, expected) => expect(validAppointmentDate(String(date), '2026-11-08')).toBe(expected));
   it('defaults to the appointment when editing, rather than the prediction', () => {
-    expect(initialAppointmentDate({ hasAppointment: true, appointmentDate: '2026-12-01', predictedDate: '2026-11-20' })).toBe('2026-12-01');
+    expect(initialAppointmentDate({ hasAppointment: true, appointmentDate: '2026-12-01', predictedDate: '2026-11-20' }, '2026-11-08')).toBe('2026-12-01');
   });
   it('defaults a new appointment to the prediction', () => {
-    expect(initialAppointmentDate({ hasAppointment: false, appointmentDate: null, predictedDate: '2026-11-20' })).toBe('2026-11-20');
+    expect(initialAppointmentDate({ hasAppointment: false, appointmentDate: null, predictedDate: '2026-11-20' }, '2026-11-08')).toBe('2026-11-20');
   });
   it('requires choosing a date for no-data rows', () => {
-    expect(initialAppointmentDate({ hasAppointment: false, appointmentDate: null, predictedDate: null })).toBe('');
+    expect(initialAppointmentDate({ hasAppointment: false, appointmentDate: null, predictedDate: null }, '2026-11-08')).toBe('');
+  });
+  it.each(['2026-11-07', '2025-01-01'])('prefills Bangkok today instead of past prediction %s', predictedDate => {
+    expect(initialAppointmentDate({ hasAppointment: false, appointmentDate: null, predictedDate }, '2026-11-08')).toBe('2026-11-08');
+  });
+  it('keeps an existing appointment when editing even if the prediction is overdue', () => {
+    expect(initialAppointmentDate({ hasAppointment: true, appointmentDate: '2026-11-20', predictedDate: '2026-11-07' }, '2026-11-08')).toBe('2026-11-20');
   });
 });
 describe('appointment errors', () => {

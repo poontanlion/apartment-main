@@ -10,6 +10,9 @@ interface LanguageContextType {
 }
 
 const translations: Record<string, Record<Language, string>> = {
+  'mnt.predictions.dashboardTitle': { th: 'งานบำรุงรักษาใกล้ถึงกำหนด', en: 'Upcoming maintenance' },
+  'mnt.predictions.dashboardEmpty': { th: 'ยังไม่มีข้อมูลคาดการณ์', en: 'No maintenance prediction data yet' },
+  'mnt.predictions.viewPredictions': { th: 'ดูรายการคาดการณ์', en: 'View maintenance predictions' },
   'mnt.predictions.appointmentSet': { th: 'ตั้งนัดแล้ว', en: 'Appointment set' },
   'mnt.predictions.editAppointment': { th: 'แก้ไขวันนัด', en: 'Edit appointment' },
   'mnt.predictions.appointmentDate': { th: 'วันนัด', en: 'Appointment date' },
