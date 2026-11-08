@@ -5,7 +5,6 @@ import com.victory.apartment.repository.*;
 import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -23,22 +22,18 @@ public class MaintenancePredictionDigestService {
     private static final Logger logger = LoggerFactory.getLogger(MaintenancePredictionDigestService.class);
     private final MaintenancePredictionRepository predictions;
     private final MaintenanceTaskTypeRepository types;
-    private final AppUserRepository users;
     private final AppNotificationRepository notifications;
     private final Clock clock;
-    private final String adminEmail;
+    private static final String BROADCAST_RECIPIENT = "system";
     private final TransactionTemplate transaction;
 
     public MaintenancePredictionDigestService(MaintenancePredictionRepository predictions,
-            MaintenanceTaskTypeRepository types, AppUserRepository users, AppNotificationRepository notifications,
-            Clock clock, PlatformTransactionManager manager,
-            @Value("${app.admin.email:${ADMIN_EMAIL:admin@victoryapartment.com}}") String adminEmail) {
+            MaintenanceTaskTypeRepository types, AppNotificationRepository notifications,
+            Clock clock, PlatformTransactionManager manager) {
         this.predictions = predictions;
         this.types = types;
-        this.users = users;
         this.notifications = notifications;
         this.clock = clock.withZone(PredictionConfig.ZONE);
-        this.adminEmail = adminEmail;
         transaction = new TransactionTemplate(manager);
         transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -59,47 +54,35 @@ public class MaintenancePredictionDigestService {
         }
         if (overdue + dueSoon == 0) return new DigestResult(0, 0, 0);
 
-        var allUsers = users.findAll();
-        Set<String> recipients = new TreeSet<>();
-        allUsers.stream().filter(user -> "admin".equalsIgnoreCase(user.getRole()))
-                .map(AppUser::getEmail).filter(Objects::nonNull).filter(email -> !email.isBlank())
-                .map(email -> email.toLowerCase(Locale.ROOT)).forEach(recipients::add);
-        // Match prediction endpoint semantics: a customer row blocks the fallback.
-        if (allUsers.stream().noneMatch(user -> adminEmail.equalsIgnoreCase(user.getEmail())))
-            recipients.add(adminEmail.toLowerCase(Locale.ROOT));
-
-        int created = 0;
-        int duplicate = 0;
-        int failure = 0;
+        String key = "maint-pred-digest:" + today;
         String message = "Overdue: " + overdue + " items; due soon (within 7 days): " + dueSoon
                 + " items. View maintenance predictions: /admin/maintenance?tab=predictions";
-        for (String recipient : recipients) {
-            try {
-                transaction.executeWithoutResult(ignored -> {
+        try {
+            boolean created = Boolean.TRUE.equals(transaction.execute(ignored -> {
+                    // Respect per-identity digests written by an earlier version.
+                    if (notifications.existsByDedupeKey(key)) return false;
                     var notification = new AppNotification();
                     notification.setId("notif-" + UUID.randomUUID().toString().substring(0, 8));
-                    notification.setUserId(recipient);
+                    // A non-null sentinel lets V5's existing unique index arbitrate
+                    // concurrent broadcasts. NULL would not provide that guarantee.
+                    notification.setUserId(BROADCAST_RECIPIENT);
                     notification.setTitle("Maintenance Predictions Daily Digest");
                     notification.setMessage(message);
                     notification.setType("warning");
                     notification.setIsRead(false);
                     notification.setCreatedAt(LocalDateTime.now(clock));
-                    notification.setDedupeKey("maint-pred-digest:" + today);
+                    notification.setDedupeKey(key);
                     notifications.saveAndFlush(notification);
-                });
-                created++;
-            } catch (DataIntegrityViolationException exception) {
-                if (isDigestDuplicate(exception)) duplicate++;
-                else {
-                    failure++;
-                    logger.error("Maintenance digest persistence failed for admin {}", recipient, exception);
-                }
-            } catch (RuntimeException exception) {
-                failure++;
-                logger.error("Maintenance digest failed for admin {}", recipient, exception);
-            }
+                    return true;
+            }));
+            return new DigestResult(created ? 1 : 0, created ? 0 : 1, 0);
+        } catch (DataIntegrityViolationException exception) {
+            if (isDigestDuplicate(exception)) return new DigestResult(0, 1, 0);
+            logger.error("Maintenance broadcast digest persistence failed", exception);
+        } catch (RuntimeException exception) {
+            logger.error("Maintenance broadcast digest failed", exception);
         }
-        return new DigestResult(created, duplicate, failure);
+        return new DigestResult(0, 0, 1);
     }
 
     private boolean isDigestDuplicate(Throwable exception) {

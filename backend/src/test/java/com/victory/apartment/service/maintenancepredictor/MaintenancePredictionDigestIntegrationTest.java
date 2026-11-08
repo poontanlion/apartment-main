@@ -72,10 +72,10 @@ class MaintenancePredictionDigestIntegrationTest {
         var row = new MaintenancePrediction(); row.setId("p-" + roomId + type); row.setRoomId(roomId); row.setTaskTypeId(type); row.setPredictedDate(date);
         predictions.saveAndFlush(row);
     }
-    @Test void digestUsesOnlyRecurringDatedUrgentPredictionsAndAdminEmails() throws Exception {
-        assertEquals(new MaintenancePredictionDigestService.DigestResult(3, 0, 0), digest.sendDailyDigest());
-        var rows = notifications.findAll(); assertEquals(3, rows.size());
-        assertEquals(Set.of("a@example.com", "b@example.com", "admin@victoryapartment.com"),
+    @Test void digestUsesOnlyRecurringDatedUrgentPredictionsAndOneBroadcast() throws Exception {
+        assertEquals(new MaintenancePredictionDigestService.DigestResult(1, 0, 0), digest.sendDailyDigest());
+        var rows = notifications.findAll(); assertEquals(1, rows.size());
+        assertEquals(Set.of("system"),
                 rows.stream().map(AppNotification::getUserId).collect(java.util.stream.Collectors.toSet()));
         for (var row : rows) {
             assertEquals("warning", row.getType()); assertFalse(row.getIsRead());
@@ -87,7 +87,7 @@ class MaintenancePredictionDigestIntegrationTest {
             assertEquals(LocalDateTime.of(2026, 11, 8, 1, 0), row.getCreatedAt());
         }
         var example = rows.get(0);
-        Files.writeString(Path.of("target", "phase6-digest-example.txt"), "title=" + example.getTitle()
+        Files.writeString(Path.of("target", "phase7-digest-example.txt"), "userId=" + example.getUserId() + "\ntitle=" + example.getTitle()
                 + "\nmessage=" + example.getMessage() + "\ntype=" + example.getType() + "\ndedupe_key=" + example.getDedupeKey() + "\n");
     }
     @Test void sameDayCountChangesDoNotNotifyAgainAndNextThaiDayDoes() {
@@ -95,12 +95,12 @@ class MaintenancePredictionDigestIntegrationTest {
         var originalMessage = notifications.findAll().get(0).getMessage();
         var row = predictions.findByRoomIdAndTaskTypeId("rm-D101", "mtt-electrical").orElseThrow();
         row.setPredictedDate(today.minusDays(2)); predictions.saveAndFlush(row);
-        assertEquals(new MaintenancePredictionDigestService.DigestResult(0, 3, 0), digest.sendDailyDigest());
+        assertEquals(new MaintenancePredictionDigestService.DigestResult(0, 1, 0), digest.sendDailyDigest());
         assertTrue(notifications.findAll().stream().allMatch(n -> n.getMessage().equals(originalMessage)));
         clock.instant.set(Instant.parse("2026-11-08T17:00:00Z"));
-        assertEquals(3, digest.sendDailyDigest().created()); assertEquals(6, notifications.count());
+        assertEquals(1, digest.sendDailyDigest().created()); assertEquals(2, notifications.count());
     }
-    @Test void concurrentRefreshesAndRepeatedRefreshesProduceOneDigestPerAdmin() throws Exception {
+    @Test void concurrentRefreshesAndRepeatedRefreshesProduceOneBroadcastDigest() throws Exception {
         for (var room : rooms.findAll()) {
             var lease = new Lease(); lease.setId("lease-" + room.getId()); lease.setRoomId(room.getId()); lease.setStatus("Active");
             lease.setTenantId("digest-fixture-tenant"); lease.setCheckInDate(LocalDate.of(2024, 1, 1));
@@ -113,7 +113,7 @@ class MaintenancePredictionDigestIntegrationTest {
             start.countDown();
             assertEquals(0, first.get(30, TimeUnit.SECONDS).failure());
             assertEquals(0, second.get(30, TimeUnit.SECONDS).failure());
-            predictor.refreshAll(); assertEquals(3, notifications.count());
+            predictor.refreshAll(); assertEquals(1, notifications.count());
         } finally { pool.shutdownNow(); }
     }
     @Test void onlyNonUrgentNullAndNonRecurringPredictionsDoNotNotify() {
@@ -123,14 +123,25 @@ class MaintenancePredictionDigestIntegrationTest {
         }
         assertEquals(0, digest.sendDailyDigest().created()); assertEquals(0, notifications.count());
     }
-    @Test void configuredIdentityWithCustomerRowIsNotARecipient() {
+    @Test void customerRowsDoNotBecomeRecipients() {
         users.saveAndFlush(new AppUser("config-customer", "admin@victoryapartment.com", "test", "Customer", "", "customer"));
-        assertEquals(2, digest.sendDailyDigest().created());
+        assertEquals(1, digest.sendDailyDigest().created());
         assertTrue(notifications.findAll().stream().noneMatch(n -> "admin@victoryapartment.com".equals(n.getUserId())));
     }
-    @Test void configuredAdminAlreadyInDatabaseIsNotAddedTwice() {
+    @Test void adminIdentitiesAndAliasesDoNotMultiplyBroadcasts() {
         users.saveAndFlush(new AppUser("config-admin", "admin@victoryapartment.com", "test", "Admin", "", "admin"));
-        assertEquals(3, digest.sendDailyDigest().created()); assertEquals(3, notifications.count());
+        users.saveAndFlush(new AppUser("admin-alias", "admin", "test", "Admin alias", "", "admin"));
+        assertEquals(1, digest.sendDailyDigest().created()); assertEquals(1, notifications.count());
+    }
+    @Test void existingPerIdentityDigestsSuppressNewBroadcastWithoutDeletingLegacyRows() {
+        for (String recipient : List.of("a@example.com", "admin")) {
+            var legacy = new AppNotification(); legacy.setId("old-" + recipient); legacy.setUserId(recipient);
+            legacy.setDedupeKey("maint-pred-digest:2026-11-08"); notifications.saveAndFlush(legacy);
+        }
+        assertEquals(new MaintenancePredictionDigestService.DigestResult(0, 1, 0), digest.sendDailyDigest());
+        assertEquals(2, notifications.count());
+        clock.instant.set(Instant.parse("2026-11-08T17:00:00Z"));
+        assertEquals(1, digest.sendDailyDigest().created()); assertEquals(3, notifications.count());
     }
     @Test void testProfileDisablesAutomaticJob() {
         assertTrue(context.getBeansOfType(MaintenancePredictionRefreshJob.class).isEmpty());
