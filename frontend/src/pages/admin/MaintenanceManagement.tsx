@@ -36,12 +36,6 @@ export const MaintenanceManagement: React.FC = () => {
     if (building === 'All') next.delete('buildingId'); else next.set('buildingId', building);
     return next;
   });
-  const [searchParams] = useSearchParams();
-  const initialBuildingId = searchParams.get('buildingId') || 'All';
-
-  const [activeTab, setActiveTab] = useState<'tasks' | 'supplies' | 'logs' | 'reminders'>(() =>
-    searchParams.get('tab') === 'supplies' ? 'supplies' : 'tasks'
-  );
   const [occupancyFilter, setOccupancyFilter] = useState<'All' | 'Occupied' | 'Vacant/Common'>('All');
   const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
   const [supplies, setSupplies] = useState<SupplyItem[]>([]);

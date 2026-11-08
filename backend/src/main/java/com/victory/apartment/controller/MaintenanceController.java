@@ -144,7 +144,6 @@ public class MaintenanceController {
 
             activityLogService.log("Maintenance Task Updated",
                 String.format("Task %s for Unit %s set to %s", existing.getTaskNo(), existing.getRoomNumber(), existing.getStatus()));
-            MaintenanceTask saved = taskRepo.save(existing);
             recalculateAndDeductSuppliesStock();
             return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
