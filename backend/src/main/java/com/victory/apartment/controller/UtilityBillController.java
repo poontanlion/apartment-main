@@ -79,7 +79,7 @@ public class UtilityBillController {
         bill.setAmountDue(roundMoney(nz(bill.getTotalAmount()) + arrears + interestAmount));
         bill.setPaidAmount(0.0);
         bill.setBalanceDue(bill.getAmountDue());
-        bill.setStatus("Pending");
+        bill.setStatus("Unpaid");
 
         UtilityBill saved = repo.save(bill);
         if (saved.getRoomId() != null) {
@@ -132,12 +132,12 @@ public class UtilityBillController {
     @GetMapping("/{id}/payments")
     public List<BillPayment> getPayments(@PathVariable String id) {
         if (!repo.existsById(id)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Bill not found.");
-        return paymentRepo.findByBillIdOrderByPaidAtAsc(id);
+        return paymentRepo.findByBillIdOrderByPaymentDateDesc(id);
     }
 
     @Transactional
     @PostMapping("/{id}/payments")
-    public UtilityBill recordPayment(@PathVariable String id, @RequestBody Map<String, Object> request) {
+    public Map<String, Object> recordPayment(@PathVariable String id, @RequestBody Map<String, Object> request) {
         UtilityBill bill = repo.findForUpdate(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bill not found."));
         YearMonth billMonth = safeMonth(bill.getBillingMonth());
         boolean balanceRolledForward = repo.findByRoomIdOrderByCreatedAtDesc(bill.getRoomId()).stream()
@@ -152,9 +152,10 @@ public class UtilityBillController {
         payment.setId("pay-" + UUID.randomUUID().toString().substring(0, 12));
         payment.setBillId(id);
         payment.setAmount(amount);
-        payment.setPaidAt(parsePaidAt(request.get("paidAt")));
-        payment.setCreatedAt(LocalDateTime.now());
-        if (request.get("slipImage") instanceof String slip) payment.setSlipImage(slip);
+        payment.setPaymentDate(parsePaidAt(request.get("paidAt")).atStartOfDay());
+        if (request.get("note") instanceof String note && !note.isBlank()) payment.setNote(note);
+        if (request.get("proofImage") instanceof String proof) payment.setProofImage(proof);
+        else if (request.get("slipImage") instanceof String slip) payment.setProofImage(slip);
         paymentRepo.save(payment);
 
         double paid = nz(bill.getPaidAmount()) + amount;
@@ -162,10 +163,10 @@ public class UtilityBillController {
         bill.setAmountDue(nz(bill.getAmountDue()) > 0 ? bill.getAmountDue() : nz(bill.getTotalAmount()));
         bill.setBalanceDue(Math.max(0, roundMoney(bill.getAmountDue() - paid)));
         bill.setStatus(statusFor(paid, bill.getBalanceDue()));
-        bill.setPaymentDate(bill.getBalanceDue() == 0 ? payment.getPaidAt().toString() : null);
+        bill.setPaymentDate(bill.getBalanceDue() == 0 ? payment.getPaymentDate().toLocalDate().toString() : null);
         UtilityBill saved = repo.save(bill);
         logService.log("Bill Payment Recorded", String.format("Recorded %.2f THB for bill %s; remaining %.2f THB", amount, bill.getInvoiceNo(), bill.getBalanceDue()));
-        return saved;
+        return Map.of("bill", saved, "payment", payment);
     }
 
     /** Kept for existing document/slip updates and older clients. */
@@ -180,14 +181,13 @@ public class UtilityBillController {
                     payment.setId("pay-" + UUID.randomUUID().toString().substring(0, 12));
                     payment.setBillId(id);
                     payment.setAmount(due);
-                    payment.setPaidAt(LocalDate.now().toString());
-                    payment.setCreatedAt(LocalDateTime.now());
-                    if (req.get("slipImage") != null) payment.setSlipImage(req.get("slipImage"));
+                    payment.setPaymentDate(LocalDateTime.now());
+                    if (req.get("slipImage") != null) payment.setProofImage(req.get("slipImage"));
                     paymentRepo.save(payment);
                     bill.setPaidAmount(nz(bill.getPaidAmount()) + due);
                     bill.setBalanceDue(0.0);
                     bill.setStatus("Paid");
-                    bill.setPaymentDate(payment.getPaidAt().toString());
+                    bill.setPaymentDate(payment.getPaymentDate().toLocalDate().toString());
                 }
             }
             if (req.containsKey("slipImage")) bill.setSlipImage(req.get("slipImage"));
@@ -197,8 +197,8 @@ public class UtilityBillController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    private String parsePaidAt(Object value) {
-        try { return value instanceof String s && !s.isBlank() ? LocalDate.parse(s).toString() : LocalDate.now().toString(); }
+    private LocalDate parsePaidAt(Object value) {
+        try { return value instanceof String s && !s.isBlank() ? LocalDate.parse(s) : LocalDate.now(); }
         catch (Exception ex) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment date must be a valid date."); }
     }
     private YearMonth safeMonth(String value) {
@@ -212,7 +212,7 @@ public class UtilityBillController {
     }
     private String statusFor(double paid, double due) {
         if (due <= 0.001) return "Paid";
-        return paid > 0 ? "Partial" : "Pending";
+        return paid > 0 ? "Partial" : "Unpaid";
     }
     private double nz(Double v) { return v == null ? 0 : v; }
     private double roundMoney(double value) { return Math.round(value * 100.0) / 100.0; }

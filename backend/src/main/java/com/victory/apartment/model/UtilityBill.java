@@ -35,11 +35,11 @@ public class UtilityBill {
     private Double interestAmount;
     @Column(name = "total_due")
     private Double amountDue;
-    @Column(name = "amount_paid")
-    private Double paidAmount;
+    @Column(name = "paid_amount", nullable = false)
+    private Double paidAmount = 0.0;
     @Column(name = "outstanding_balance")
     private Double balanceDue;
-    private String status; // Pending, Partial, Paid
+    private String status; // Unpaid, Partial, Paid
     private String paymentDate;
     @Column(columnDefinition = "text")
     private String slipImage;

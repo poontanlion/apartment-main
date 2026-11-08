@@ -112,7 +112,16 @@ export interface RentQuote {
   leaseId: string | null;
 }
 
-export type BillStatus = 'Pending' | 'Partial' | 'Paid';
+export type BillStatus = 'Unpaid' | 'Partial' | 'Paid';
+
+export interface BillPayment {
+  id: string;
+  billId: string;
+  amount: number;
+  paymentDate: string;
+  note?: string;
+  proofImage?: string;
+}
 
 export interface UtilityBill {
   id: string;
@@ -167,6 +176,8 @@ export interface SupplyItem {
   stockQuantity: number;
   unitCost: number;
   unitName: string;
+  lowStockThreshold: number;
+  lowStockAlertActive?: boolean;
 }
 
 export interface MaintenanceTask {

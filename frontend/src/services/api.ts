@@ -1,5 +1,5 @@
 import {
-  Room, Tenant, Lease, UtilityBill, BillStatus, MaintenanceTask, SupplyItem,
+  Room, Tenant, Lease, UtilityBill, BillStatus, BillPayment, MaintenanceTask, SupplyItem,
   MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication,
   RoomPrice, RoomPriceHistory, RentQuote
 } from '../types';
@@ -219,11 +219,6 @@ export const saveBillingSettings = (monthlyInterestRate: number): Promise<{ id: 
     method: 'PUT', body: JSON.stringify({ monthlyInterestRate }),
   });
 
-export const recordBillPayment = (billId: string, amount: number): Promise<UtilityBill> =>
-  fetchJson<UtilityBill>(`${API_BASE}/utility-bills/${encodeURIComponent(billId)}/payments`, {
-    method: 'POST', body: JSON.stringify({ amount, paidAt: new Date().toISOString().slice(0, 10) }),
-  });
-
 export const updateBillStatus = async (billId: string, status: BillStatus, slipImage?: string, scannedDocument?: string): Promise<UtilityBill | null> => {
   try {
     return await fetchJson<UtilityBill>(`${API_BASE}/utility-bills/${billId}/status`, {
@@ -234,6 +229,12 @@ export const updateBillStatus = async (billId: string, status: BillStatus, slipI
     return null;
   }
 };
+
+export const getBillPayments = (billId: string): Promise<BillPayment[]> =>
+  fetchJson<BillPayment[]>(`${API_BASE}/utility-bills/${billId}/payments`);
+
+export const addBillPayment = (billId: string, payload: { amount: number; note?: string; proofImage?: string }): Promise<{ bill: UtilityBill; payment: BillPayment }> =>
+  fetchJson<{ bill: UtilityBill; payment: BillPayment }>(`${API_BASE}/utility-bills/${billId}/payments`, { method: 'POST', body: JSON.stringify(payload) });
 
 // ----------------------------------------------------
 // MAINTENANCE TASKS & SUPPLY USAGE API

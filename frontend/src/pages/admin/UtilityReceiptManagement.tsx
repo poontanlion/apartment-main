@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UtilityBill, Room, Lease, RentQuote } from '../../types';
-import { getUtilityBills, saveUtilityBill, updateBillStatus, getRooms, getLeases, getRentQuote, recordBillPayment, getBillingSettings, saveBillingSettings } from '../../services/api';
+import { UtilityBill, Room, Lease, RentQuote, BillPayment } from '../../types';
+import { getUtilityBills, saveUtilityBill, updateBillStatus, getRooms, getLeases, getRentQuote, getBillPayments, addBillPayment, getBillingSettings, saveBillingSettings } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import { currentBillingMonth, recentBillingMonths } from '../../utils/billingMonth';
 import { FileText, Plus, Printer, Droplets, Zap, Search, Building2 } from 'lucide-react';
@@ -62,8 +62,9 @@ export const UtilityReceiptManagement: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [leases, setLeases] = useState<Lease[]>([]);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Partial' | 'Paid'>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Unpaid' | 'Partial' | 'Paid'>('All');
   const [selectedBillForPayment, setSelectedBillForPayment] = useState<UtilityBill | null>(null);
+  const [paymentHistory, setPaymentHistory] = useState<BillPayment[]>([]);
   const [monthlyInterestRate, setMonthlyInterestRate] = useState(0);
   const [savedInterestRate, setSavedInterestRate] = useState(0);
   const [monthFilter, setMonthFilter] = useState<string>('All');
@@ -222,12 +223,23 @@ export const UtilityReceiptManagement: React.FC = () => {
     }
   };
 
-  const handleRecordPayment = async (amount: number) => {
+  const handleOpenPaymentModal = async (bill: UtilityBill) => {
+    setSelectedBillForPayment(bill);
+    setPaymentHistory([]);
+    try {
+      setPaymentHistory(await getBillPayments(bill.id));
+    } catch {
+      setPaymentHistory([]);
+    }
+  };
+
+  const handleRecordPayment = async (amount: number, note?: string, proofImage?: string) => {
     if (!selectedBillForPayment) return;
     try {
-      const updated = await recordBillPayment(selectedBillForPayment.id, amount);
-      setBills(prev => prev.map(bill => bill.id === updated.id ? updated : bill));
+      const result = await addBillPayment(selectedBillForPayment.id, { amount, note, proofImage });
+      setBills(prev => prev.map(bill => bill.id === result.bill.id ? result.bill : bill));
       setSelectedBillForPayment(null);
+      setPaymentHistory([]);
       toast.success(language === 'th' ? 'บันทึกรับชำระแล้ว' : 'Payment recorded');
     } catch (err) {
       toast.error((err as Error).message);
@@ -370,8 +382,8 @@ export const UtilityReceiptManagement: React.FC = () => {
                 {t('common.all')}
               </button>
               <button
-                onClick={() => setStatusFilter('Pending')}
-                className={`px-3 py-1 rounded-lg font-medium transition-all ${statusFilter === 'Pending' ? 'bg-nike-canvas dark:bg-nike-dark-elevated text-amber-600 dark:text-amber-400 shadow-xs' : 'text-nike-mute'}`}
+                onClick={() => setStatusFilter('Unpaid')}
+                className={`px-3 py-1 rounded-lg font-medium transition-all ${statusFilter === 'Unpaid' ? 'bg-nike-canvas dark:bg-nike-dark-elevated text-amber-600 dark:text-amber-400 shadow-xs' : 'text-nike-mute'}`}
               >
                 {t('status.unpaid')}
               </button>
@@ -507,7 +519,7 @@ export const UtilityReceiptManagement: React.FC = () => {
                         }`}>
                           {bill.status === 'Paid' ? t('status.paid') : bill.status === 'Partial' ? (language === 'th' ? 'จ่ายบางส่วน' : 'Partially paid') : t('status.unpaid')}
                         </span>
-                        {bill.status !== 'Paid' && latestBillIds.has(bill.id) && <button type="button" onClick={() => setSelectedBillForPayment(bill)} className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">{language === 'th' ? 'รับชำระ' : 'Record payment'}</button>}
+                        {bill.status !== 'Paid' && latestBillIds.has(bill.id) && <button type="button" onClick={() => void handleOpenPaymentModal(bill)} className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">{language === 'th' ? 'รับชำระ' : 'Record payment'}</button>}
                         {bill.status !== 'Paid' && !latestBillIds.has(bill.id) && <span className="text-[10px] text-slate-500">{language === 'th' ? 'ยอดยกไปบิลล่าสุดแล้ว' : 'Rolled into latest bill'}</span>}
                       </div>
                     </td>
@@ -845,7 +857,7 @@ export const UtilityReceiptManagement: React.FC = () => {
       )}
 
       {selectedBillForPayment && (
-        <BillPaymentModal bill={selectedBillForPayment} onClose={() => setSelectedBillForPayment(null)} onSubmit={handleRecordPayment} />
+        <BillPaymentModal bill={selectedBillForPayment} payments={paymentHistory} onClose={() => { setSelectedBillForPayment(null); setPaymentHistory([]); }} onSubmit={handleRecordPayment} />
       )}
 
       {/* PRINTABLE RECEIPT MODAL */}
