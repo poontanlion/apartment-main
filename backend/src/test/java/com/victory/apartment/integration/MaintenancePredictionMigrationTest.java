@@ -21,7 +21,7 @@ class MaintenancePredictionMigrationTest {
 
     @Test
     void migratesEmptyDatabaseAndSeedsFiveTypes() throws Exception {
-        migration("empty_database", "4").migrate();
+        migration("empty_database", "7").migrate();
         try (var c = connection("empty_database")) {
             assertEquals(5, number(c, "SELECT count(*) FROM maintenance_task_types"));
             assertEquals(4, number(c, "SELECT count(*) FROM maintenance_task_types WHERE is_recurring"));
@@ -32,7 +32,7 @@ class MaintenancePredictionMigrationTest {
 
     @Test
     void backfillsConservativelyAndCanBeRepeatedWithoutChangingLegacyValues() throws Exception {
-        migration("legacy_database", "3").migrate();
+        migration("legacy_database", "6").migrate();
         try (var c = connection("legacy_database"); var s = c.createStatement()) {
             s.execute("INSERT INTO rooms(id,room_number,floor) VALUES ('rm-A101','A101',1)");
             s.execute("""
@@ -58,7 +58,7 @@ class MaintenancePredictionMigrationTest {
                 ('leap','rm-A101','Electrical',NULL,'2024-02-29')
                 """);
         }
-        migration("legacy_database", "4").migrate();
+        migration("legacy_database", "7").migrate();
         try (var c = connection("legacy_database"); var s = c.createStatement()) {
             assertEquals(12, number(c, "SELECT count(*) FROM maintenance_logs"));
             assertEquals(11, number(c, "SELECT count(*) FROM maintenance_logs WHERE task_type_id IS NOT NULL"));
@@ -69,7 +69,7 @@ class MaintenancePredictionMigrationTest {
             assertEquals(7, number(c, "SELECT count(*) FROM maintenance_logs WHERE id IN ('pending','cancelled','missing-time','orphan','invalid','impossible','unmatched') AND completed_date IS NULL"));
             // SQL itself is repeatable, including when the connection timezone differs.
             s.execute("SET TIME ZONE 'America/Los_Angeles'");
-            try (var resource = getClass().getResourceAsStream("/db/migration/V4__maintenance_predictions.sql")) {
+            try (var resource = getClass().getResourceAsStream("/db/migration/V7__maintenance_predictions.sql")) {
                 assertNotNull(resource);
                 s.execute(new String(resource.readAllBytes(), StandardCharsets.UTF_8));
             }
