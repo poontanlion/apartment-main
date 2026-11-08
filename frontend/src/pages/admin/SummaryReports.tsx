@@ -99,7 +99,7 @@ export const SummaryReports: React.FC = () => {
       ? `${from ? monthName(from) : t('reports.rangeStart')} - ${to ? monthName(to) : t('reports.rangeLatest')}`
       : t('common.all');
     const buildingName = buildings.find(building => building.id === buildingId)?.name ?? t('common.all');
-    const statusName = status === 'Paid' ? t('status.paid') : status === 'Pending' ? t('status.unpaid') : t('common.all');
+    const statusName = status === 'Paid' ? t('status.paid') : status === 'Unpaid' ? t('status.unpaid') : t('common.all');
     return [
       `${t('reports.filter.range')}: ${range}`,
       `${t('reports.filter.building')}: ${buildingName}`,
@@ -188,7 +188,7 @@ export const SummaryReports: React.FC = () => {
           </select>
           <div className={segmentGroupClass} role="group" aria-label={t('reports.filter.status')}>
             <button type="button" aria-pressed={status === 'All'} onClick={() => setStatus('All')} className={segmentClass(status === 'All')}>{t('common.all')}</button>
-            <button type="button" aria-pressed={status === 'Pending'} onClick={() => setStatus('Pending')} className={segmentClass(status === 'Pending')}>{t('status.unpaid')}</button>
+            <button type="button" aria-pressed={status === 'Unpaid'} onClick={() => setStatus('Unpaid')} className={segmentClass(status === 'Unpaid')}>{t('status.unpaid')}</button>
             <button type="button" aria-pressed={status === 'Paid'} onClick={() => setStatus('Paid')} className={segmentClass(status === 'Paid')}>{t('status.paid')}</button>
           </div>
           <div className="relative flex-1 min-w-[180px] sm:max-w-xs">

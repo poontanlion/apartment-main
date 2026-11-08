@@ -83,7 +83,7 @@ public class ReportService {
         return isUnset(filter.buildingId()) || filter.buildingId().equals(bill.buildingId());
     }
 
-    /** Pending means anything not paid, which keeps paid + outstanding equal to billed. */
+    /** Unpaid means anything not fully paid, which keeps paid + outstanding equal to billed. */
     private static boolean matchesStatus(Filter filter, BillReportRow bill) {
         if (isUnset(filter.status())) {
             return true;

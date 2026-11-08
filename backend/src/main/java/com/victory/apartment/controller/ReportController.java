@@ -19,7 +19,7 @@ import java.util.Set;
 @RequestMapping("/api/reports")
 public class ReportController {
 
-    private static final Set<String> STATUSES = Set.of("All", "Paid", "Pending");
+    private static final Set<String> STATUSES = Set.of("All", "Paid", "Unpaid");
 
     private final ReportService reports;
 
@@ -41,7 +41,7 @@ public class ReportController {
             throw badRequest("INVALID_MONTH_RANGE", "The start month must not be after the end month.");
         }
         if (status != null && !status.isEmpty() && !STATUSES.contains(status)) {
-            throw badRequest("INVALID_STATUS", "Status must be All, Paid or Pending.");
+            throw badRequest("INVALID_STATUS", "Status must be All, Paid or Unpaid.");
         }
         return reports.summarize(new Filter(grouping, fromMonth, toMonth, buildingId, status, search));
     }

@@ -103,10 +103,10 @@ class ReportControllerTest {
     }
 
     @Test
-    void summary_acceptsPendingAndAllStatus() throws Exception {
+    void summary_acceptsUnpaidAndAllStatus() throws Exception {
         when(reportService.summarize(any())).thenReturn(summary());
 
-        mockMvc.perform(get(URL).param("groupBy", "UNIT").param("status", "Pending")).andExpect(status().isOk());
+        mockMvc.perform(get(URL).param("groupBy", "UNIT").param("status", "Unpaid")).andExpect(status().isOk());
         mockMvc.perform(get(URL).param("groupBy", "UNIT").param("status", "All")).andExpect(status().isOk());
     }
 

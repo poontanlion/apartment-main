@@ -136,11 +136,6 @@ public class UtilityBillController {
         return rentQuotes.quote(roomId, RentQuoteService.parseBillingMonth(month));
     }
 
-    private double rentInsideTotal(UtilityBill bill) {
-        double total = nz(bill.getTotalAmount());
-        return Math.max(0, total - nz(bill.getWaterAmount()) - nz(bill.getElectricAmount()) - (bill.getCommonFee() != null ? bill.getCommonFee() : 300));
-    }
-
     private void calculateAmounts(UtilityBill bill) {
         double waterUnits = Math.max(0, nz(bill.getCurrWaterMeter()) - nz(bill.getPrevWaterMeter()));
         double electricUnits = Math.max(0, nz(bill.getCurrElectricMeter()) - nz(bill.getPrevElectricMeter()));

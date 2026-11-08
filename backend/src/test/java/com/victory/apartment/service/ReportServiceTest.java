@@ -380,15 +380,15 @@ class ReportServiceTest {
     }
 
     @Test
-    void filtersStatus_pendingMeansNotPaid() {
+    void filtersStatus_unpaidMeansNotPaid() {
         Bill[] bills = {
             bill().total(100.0).status("Paid"),
-            bill().total(200.0).status("Pending"),
+            bill().total(200.0).status("Partial"),
             bill().total(400.0).status("Overdue"),
             bill().total(800.0).status(null),
         };
 
-        assertAmount(summarize(status("Pending"), bills).totals().billed(), "1400");
+        assertAmount(summarize(status("Unpaid"), bills).totals().billed(), "1400");
         assertAmount(summarize(status("Paid"), bills).totals().billed(), "100");
         assertAmount(summarize(status("All"), bills).totals().billed(), "1500");
     }
