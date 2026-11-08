@@ -29,15 +29,17 @@ public class UtilityBill {
     private Double electricAmount;
     private Double commonFee;
     private Double totalAmount; // Charges for this billing month only
-    @Column(name = "previous_outstanding")
-    private Double balanceForwardAmount;
-    private Double interestRate;
-    private Double interestAmount;
-    @Column(name = "total_due")
+    @Column(name = "previous_outstanding", nullable = false)
+    private Double balanceForwardAmount = 0.0;
+    @Column(nullable = false)
+    private Double interestRate = 0.0;
+    @Column(nullable = false)
+    private Double interestAmount = 0.0;
+    @Column(name = "total_due", nullable = false)
     private Double amountDue;
     @Column(name = "paid_amount", nullable = false)
     private Double paidAmount = 0.0;
-    @Column(name = "outstanding_balance")
+    @Column(name = "outstanding_balance", nullable = false)
     private Double balanceDue;
     private String status; // Unpaid, Partial, Paid
     private String paymentDate;
@@ -48,6 +50,18 @@ public class UtilityBill {
     private LocalDateTime createdAt;
 
     public UtilityBill() {}
+
+    @PrePersist
+    private void initializeBillingBalances() {
+        if (balanceForwardAmount == null) balanceForwardAmount = 0.0;
+        if (interestRate == null) interestRate = 0.0;
+        if (interestAmount == null) interestAmount = 0.0;
+        if (paidAmount == null) paidAmount = 0.0;
+        if (amountDue == null) {
+            amountDue = (totalAmount != null ? totalAmount : 0.0) + balanceForwardAmount + interestAmount;
+        }
+        if (balanceDue == null) balanceDue = Math.max(0.0, amountDue - paidAmount);
+    }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
