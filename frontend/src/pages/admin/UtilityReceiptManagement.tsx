@@ -11,6 +11,7 @@ import { BulkReceiptModal } from '../../components/admin/BulkReceiptModal';
 import { ScannedDocumentModal } from '../../components/admin/ScannedDocumentModal';
 import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'sonner';
+import { UtilityUsagePanel } from '../../components/admin/UtilityUsagePanel';
 
 const MONTH_NAMES = [
   { value: 'January', th: 'มกราคม (Jan)', en: 'January' },
@@ -341,7 +342,7 @@ export const UtilityReceiptManagement: React.FC = () => {
           </span>
         </div>
       </div>
-
+      <UtilityUsagePanel bills={bills} rooms={rooms} onImported={fetchData} />
       {/* BILLS & RECEIPTS TABLE */}
       <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card rounded-2xl p-6 space-y-4 shadow-xs">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
