@@ -19,13 +19,15 @@ public class MaintenancePredictionTrigger {
     private final RoomRepository rooms;
     private final MaintenancePredictorService predictor;
     private final Clock clock;
+    private final MaintenanceAppointmentService appointments;
 
     public MaintenancePredictionTrigger(MaintenanceTaskTypeRepository types, RoomRepository rooms,
-            MaintenancePredictorService predictor, Clock clock) {
+            MaintenancePredictorService predictor, Clock clock, MaintenanceAppointmentService appointments) {
         this.types = types;
         this.rooms = rooms;
         this.predictor = predictor;
         this.clock = clock.withZone(PredictionConfig.ZONE);
+        this.appointments = appointments;
     }
 
     /** The single policy for task/manual history dates, also used by legacy GET sync. */
@@ -60,6 +62,16 @@ public class MaintenancePredictionTrigger {
         } catch (RuntimeException exception) {
             logger.error("Prediction trigger failed for room {} task type {}; maintenance write retained",
                     roomId, taskTypeId, exception);
+        }
+    }
+
+    public void completeSafely(MaintenanceLog log) {
+        if (log.getRoomId() == null || log.getTaskTypeId() == null || log.getCompletedDate() == null) return;
+        try {
+            appointments.completed(log.getRoomId(), log.getTaskTypeId(), log.getCompletedDate());
+        } catch (RuntimeException exception) {
+            logger.error("Prediction completion failed for room {} task type {}; maintenance write retained",
+                    log.getRoomId(), log.getTaskTypeId(), exception);
         }
     }
 }

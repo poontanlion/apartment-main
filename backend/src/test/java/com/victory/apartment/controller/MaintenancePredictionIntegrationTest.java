@@ -132,7 +132,7 @@ class MaintenancePredictionIntegrationTest {
         assertTrue(rows.get(6).get("predictedDate").isNull());
         assertTrue(rows.get(6).get("daysRemaining").isNull());
         Set<String> fields = Set.of("roomId", "roomNumber", "buildingId", "buildingName", "taskTypeId",
-                "taskTypeNameTh", "taskTypeNameEn", "predictedDate", "daysRemaining", "status", "hasAppointment");
+                "taskTypeNameTh", "taskTypeNameEn", "predictedDate", "daysRemaining", "status", "hasAppointment", "appointmentDate");
         for (JsonNode row : rows) {
             Set<String> actual = new HashSet<>(); row.fieldNames().forEachRemaining(actual::add);
             assertEquals(fields, actual); assertFalse(row.get("hasAppointment").asBoolean());

@@ -48,6 +48,11 @@ public class MaintenancePredictorService {
         return inPairTransaction(roomId, taskTypeId, true, overrideDate);
     }
 
+    /** Caller owns the transaction so reminder and prediction changes commit together. */
+    MaintenancePrediction setOverrideInCurrentTransaction(String roomId, MaintenanceTaskType type, LocalDate date) {
+        return calculateAndSave(roomId, type, LocalDate.now(clock), true, date);
+    }
+
     private Optional<MaintenancePrediction> inPairTransaction(String roomId, String taskTypeId,
             boolean changeOverride, LocalDate overrideDate) {
         try {
@@ -70,7 +75,7 @@ public class MaintenancePredictorService {
         });
     }
 
-    private boolean isPairConflict(Throwable exception) {
+    boolean isPairConflict(Throwable exception) {
         for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
             if (cause instanceof ConstraintViolationException constraint
                     && "23505".equals(constraint.getSQLState())

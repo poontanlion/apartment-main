@@ -188,7 +188,8 @@ public class MaintenanceController {
         predictionTrigger.prepare(log, task, newlyCompleted);
         logRepo.save(log);
         if (trigger) {
-            predictionTrigger.recalculateSafely(log.getRoomId(), log.getTaskTypeId());
+            if (newlyCompleted) predictionTrigger.completeSafely(log);
+            else predictionTrigger.recalculateSafely(log.getRoomId(), log.getTaskTypeId());
             if (!java.util.Objects.equals(oldRoomId, log.getRoomId())
                     || !java.util.Objects.equals(oldTaskTypeId, log.getTaskTypeId()))
                 predictionTrigger.recalculateSafely(oldRoomId, oldTaskTypeId);

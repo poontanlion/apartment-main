@@ -26,12 +26,14 @@ public class MaintenancePredictionController {
     private final MaintenanceTaskTypeRepository types;
     private final AppUserRepository users;
     private final MaintenancePredictorService predictor;
+    private final MaintenanceAppointmentService appointments;
     private final Clock clock;
     private final String adminEmail;
 
     public MaintenancePredictionController(MaintenancePredictionRepository predictions, RoomRepository rooms,
             MaintenanceTaskTypeRepository types, AppUserRepository users, MaintenancePredictorService predictor,
-            Clock clock, @Value("${app.admin.email:${ADMIN_EMAIL:admin@victoryapartment.com}}") String adminEmail) {
+            Clock clock, @Value("${app.admin.email:${ADMIN_EMAIL:admin@victoryapartment.com}}") String adminEmail,
+            MaintenanceAppointmentService appointments) {
         this.predictions = predictions;
         this.rooms = rooms;
         this.types = types;
@@ -39,11 +41,12 @@ public class MaintenancePredictionController {
         this.predictor = predictor;
         this.clock = clock.withZone(PredictionConfig.ZONE);
         this.adminEmail = adminEmail;
+        this.appointments = appointments;
     }
 
     public record PredictionRow(String roomId, String roomNumber, String buildingId, String buildingName,
             String taskTypeId, String taskTypeNameTh, String taskTypeNameEn, LocalDate predictedDate,
-            Long daysRemaining, String status, boolean hasAppointment) {}
+            Long daysRemaining, String status, boolean hasAppointment, String appointmentDate) {}
     public record Summary(long overdue, long dueSoon, long within30, long total) {}
     public record PredictionList(List<PredictionRow> predictions, Summary summary) {}
 
@@ -57,14 +60,15 @@ public class MaintenancePredictionController {
         requireAdmin(request);
         Set<String> statuses = parseStatuses(status);
         LocalDate today = LocalDate.now(clock);
-        // Three bulk reads independent of row count; no recalculation or writes.
+        // Four bulk reads independent of row count; no recalculation or writes.
         var roomMap = rooms.findAll().stream().collect(Collectors.toMap(Room::getId, Function.identity()));
         var typeMap = types.findAll().stream().filter(t -> Boolean.TRUE.equals(t.getIsRecurring()))
                 .collect(Collectors.toMap(MaintenanceTaskType::getId, Function.identity()));
         String search = q == null ? "" : q.trim().toLowerCase(Locale.ROOT);
+        var appointmentDates = appointments.appointmentDates();
         var filtered = predictions.findAll().stream()
                 .filter(p -> roomMap.containsKey(p.getRoomId()) && typeMap.containsKey(p.getTaskTypeId()))
-                .map(p -> row(p, roomMap.get(p.getRoomId()), typeMap.get(p.getTaskTypeId()), today))
+                .map(p -> row(p, roomMap.get(p.getRoomId()), typeMap.get(p.getTaskTypeId()), today, appointmentDates))
                 .filter(p -> matches(roomId, p.roomId()) && matches(taskTypeId, p.taskTypeId())
                         && matches(buildingId, p.buildingId()))
                 .filter(p -> search.isEmpty() || contains(p.roomNumber(), search)
@@ -106,7 +110,35 @@ public class MaintenancePredictionController {
         }
         var updated = predictor.setOverride(roomId, taskTypeId, date)
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Prediction target no longer exists"));
-        return row(updated, room, type, LocalDate.now(clock));
+        return row(updated, room, type, LocalDate.now(clock), appointments.appointmentDates());
+    }
+
+    @PutMapping("/{roomId}/{taskTypeId}/appointment")
+    public PredictionRow setAppointment(HttpServletRequest request, @PathVariable String roomId,
+            @PathVariable String taskTypeId, @RequestBody JsonNode body) {
+        requireAdmin(request);
+        if (!body.isObject() || body.size() != 1 || !body.hasNonNull("date") || !body.get("date").isTextual()
+                || !body.get("date").textValue().matches("[0-9]{4}-[0-9]{2}-[0-9]{2}"))
+            throw error(HttpStatus.BAD_REQUEST, "date must be YYYY-MM-DD");
+        LocalDate date;
+        try { date = LocalDate.parse(body.get("date").textValue()); }
+        catch (DateTimeParseException exception) { throw error(HttpStatus.BAD_REQUEST, "Invalid appointment date"); }
+        var updated = appointments.put(roomId, taskTypeId, date);
+        return appointmentRow(updated);
+    }
+
+    @DeleteMapping("/{roomId}/{taskTypeId}/appointment")
+    public PredictionRow deleteAppointment(HttpServletRequest request, @PathVariable String roomId,
+            @PathVariable String taskTypeId) {
+        requireAdmin(request);
+        var updated = appointments.delete(roomId, taskTypeId);
+        return appointmentRow(updated);
+    }
+
+    private PredictionRow appointmentRow(MaintenanceAppointmentService.Updated updated) {
+        Map<MaintenanceAppointmentService.Pair, String> dates = updated.appointmentDate() == null ? Map.of()
+                : Map.of(new MaintenanceAppointmentService.Pair(updated.room().getId(), updated.type().getCategoryKey()), updated.appointmentDate());
+        return row(updated.prediction(), updated.room(), updated.type(), LocalDate.now(clock), dates);
     }
 
     private void requireAdmin(HttpServletRequest request) {
@@ -135,12 +167,14 @@ public class MaintenancePredictionController {
         return result;
     }
 
-    private PredictionRow row(MaintenancePrediction prediction, Room room, MaintenanceTaskType type, LocalDate today) {
+    private PredictionRow row(MaintenancePrediction prediction, Room room, MaintenanceTaskType type, LocalDate today,
+            Map<MaintenanceAppointmentService.Pair, String> appointmentDates) {
         var date = prediction.getPredictedDate();
+        var appointmentDate = appointmentDates.get(new MaintenanceAppointmentService.Pair(room.getId(), type.getCategoryKey()));
         return new PredictionRow(room.getId(), room.getRoomNumber(), room.getBuildingId(), room.getBuildingName(),
                 type.getId(), type.getNameTh(), type.getNameEn(), date,
                 date == null ? null : ChronoUnit.DAYS.between(today, date),
-                PredictionStatus.from(date, today).name().toLowerCase(Locale.ROOT), false);
+                PredictionStatus.from(date, today).name().toLowerCase(Locale.ROOT), appointmentDate != null, appointmentDate);
     }
 
     private long count(List<PredictionRow> rows, String status) {
