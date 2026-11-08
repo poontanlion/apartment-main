@@ -15,6 +15,10 @@ public class SupplyItem {
     private String category;
     private Integer stockQuantity;
     private Integer baseStockQuantity;
+    @Column(nullable = false)
+    private Integer lowStockThreshold = 2;
+    @Column(nullable = false)
+    private Boolean lowStockAlertActive = false;
     private Double unitCost;
     private String unitName;
 
@@ -30,6 +34,10 @@ public class SupplyItem {
     public void setStockQuantity(Integer stockQuantity) { this.stockQuantity = stockQuantity; }
     public Integer getBaseStockQuantity() { return baseStockQuantity; }
     public void setBaseStockQuantity(Integer baseStockQuantity) { this.baseStockQuantity = baseStockQuantity; }
+    public Integer getLowStockThreshold() { return lowStockThreshold; }
+    public void setLowStockThreshold(Integer lowStockThreshold) { this.lowStockThreshold = lowStockThreshold; }
+    public Boolean getLowStockAlertActive() { return lowStockAlertActive; }
+    public void setLowStockAlertActive(Boolean lowStockAlertActive) { this.lowStockAlertActive = lowStockAlertActive; }
     public Double getUnitCost() { return unitCost; }
     public void setUnitCost(Double unitCost) { this.unitCost = unitCost; }
     public String getUnitName() { return unitName; }
