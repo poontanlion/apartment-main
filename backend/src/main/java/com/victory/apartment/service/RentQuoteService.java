@@ -46,15 +46,24 @@ public class RentQuoteService {
         Room room = Optional.ofNullable(roomId).flatMap(rooms::findById)
                 .orElseThrow(() -> new PriceRuleException(HttpStatus.BAD_REQUEST, "ROOM_NOT_FOUND", "Room not found."));
 
-        // No proration, so one lease sets the whole month. A renewal in that month takes over from the old lease.
         Optional<Lease> lease = leases.findByRoomIdAndStatusIn(roomId, List.of("Active", "Terminated")).stream()
                 .filter(l -> l.getRentAmount() != null && covers(l, month))
                 .max(Comparator.comparing(Lease::getCheckInDate));
-        if (lease.isEmpty()) {
-            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "NO_TENANT_FOR_BILLING_MONTH",
-                    "Cannot issue a bill because no lease covers this room for the selected month.");
+        if (lease.isPresent()) {
+            return new RentQuote(lease.get().getRentAmount(), "LEASE", lease.get().getId());
         }
-        return new RentQuote(lease.get().getRentAmount(), "LEASE", lease.get().getId());
+
+        Double roomPrice = prices.priceFor(room, month);
+        if (roomPrice == null) {
+            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "RENT_UNAVAILABLE", "No rent price is configured for this room and month.");
+        }
+        return new RentQuote(roomPrice, "ROOM_PRICE", null);
+    }
+
+    public boolean hasTenantForBillingMonth(String roomId, YearMonth month) {
+        if (roomId == null || rooms.findById(roomId).isEmpty()) return false;
+        return leases.findByRoomIdAndStatusIn(roomId, List.of("Active", "Terminated")).stream()
+                .anyMatch(lease -> covers(lease, month));
     }
 
     private static boolean covers(Lease lease, YearMonth month) {

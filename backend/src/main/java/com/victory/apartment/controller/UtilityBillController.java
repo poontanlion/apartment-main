@@ -61,7 +61,22 @@ public class UtilityBillController {
         boolean monthAlreadyBilled = repo.findByRoomIdOrderByCreatedAtDesc(bill.getRoomId()).stream()
                 .anyMatch(old -> safeMonth(old.getBillingMonth()).equals(targetMonth));
         if (monthAlreadyBilled) throw new PriceRuleException(HttpStatus.CONFLICT, "DUPLICATE_MONTH_BILL", "This room already has a bill for the selected month.");
-        RentQuote quote = rentQuotes.quote(bill.getRoomId(), targetMonth);
+        RentQuote quote;
+        try {
+            quote = rentQuotes.quote(bill.getRoomId(), targetMonth);
+        } catch (PriceRuleException e) {
+            if ("RENT_UNAVAILABLE".equals(e.getCode())
+                    && !rentQuotes.hasTenantForBillingMonth(bill.getRoomId(), targetMonth)) {
+                throw new PriceRuleException(HttpStatus.BAD_REQUEST, "NO_TENANT_FOR_BILLING_MONTH",
+                        "Cannot issue a bill because no lease covers this room for the selected month.");
+            }
+            throw e;
+        }
+        if (!"LEASE".equals(quote.source())
+                && !rentQuotes.hasTenantForBillingMonth(bill.getRoomId(), targetMonth)) {
+            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "NO_TENANT_FOR_BILLING_MONTH",
+                    "Cannot issue a bill because no lease covers this room for the selected month.");
+        }
         bill.setRentAmount(quote.rentAmount());
         bill.setLeaseId(quote.leaseId());
         calculateAmounts(bill);

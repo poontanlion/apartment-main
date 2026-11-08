@@ -7,6 +7,7 @@ import com.victory.apartment.repository.UtilityBillRepository;
 import com.victory.apartment.repository.BookingRepository;
 import com.victory.apartment.model.Room;
 import com.victory.apartment.service.ActivityLogService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -22,19 +23,24 @@ public class BuildingController {
     private final BuildingRepository repo;
     private final com.victory.apartment.repository.RoomRepository roomRepo;
     private final ActivityLogService logService;
-    private final LeaseRepository leaseRepo;
-    private final UtilityBillRepository billRepo;
-    private final BookingRepository bookingRepo;
+    private LeaseRepository leaseRepo;
+    private UtilityBillRepository billRepo;
+    private BookingRepository bookingRepo;
 
-    public BuildingController(BuildingRepository repo, com.victory.apartment.repository.RoomRepository roomRepo, ActivityLogService logService,
-                              LeaseRepository leaseRepo, UtilityBillRepository billRepo, BookingRepository bookingRepo) {
+    public BuildingController(BuildingRepository repo, com.victory.apartment.repository.RoomRepository roomRepo, ActivityLogService logService) {
         this.repo = repo;
         this.roomRepo = roomRepo;
         this.logService = logService;
-        this.leaseRepo = leaseRepo;
-        this.billRepo = billRepo;
-        this.bookingRepo = bookingRepo;
     }
+
+    @Autowired(required = false)
+    public void setLeaseRepository(LeaseRepository leaseRepo) { this.leaseRepo = leaseRepo; }
+
+    @Autowired(required = false)
+    public void setUtilityBillRepository(UtilityBillRepository billRepo) { this.billRepo = billRepo; }
+
+    @Autowired(required = false)
+    public void setBookingRepository(BookingRepository bookingRepo) { this.bookingRepo = bookingRepo; }
 
     @GetMapping
     public List<Building> getAll() {
@@ -51,7 +57,15 @@ public class BuildingController {
     @PostMapping
     @Transactional
     public ResponseEntity<?> create(@RequestBody Building building) {
-        if (building.getName() == null || building.getName().isBlank() || building.getCode() == null || building.getCode().isBlank() || !validConfig(building.getFloors(), building.getTotalRooms())) return ResponseEntity.badRequest().body(java.util.Map.of("message", "Building name, code, floors, and room count are required and must be valid."));
+        if (building.getName() == null || building.getName().isBlank()) return ResponseEntity.badRequest().body(java.util.Map.of("message", "Building name is required."));
+        if (building.getCode() == null || building.getCode().isBlank()) {
+            String code = building.getName().replaceAll("[^A-Za-z0-9]", "").toUpperCase();
+            building.setCode(code.substring(0, Math.min(code.length(), 8)));
+            if (building.getCode().isBlank()) building.setCode("BLDG");
+        }
+        if (building.getFloors() == null) building.setFloors(1);
+        if (building.getTotalRooms() == null) building.setTotalRooms(1);
+        if (!validConfig(building.getFloors(), building.getTotalRooms())) return ResponseEntity.badRequest().body(java.util.Map.of("message", "Floors and room count must be valid positive integers."));
         if (building.getId() == null || building.getId().isEmpty()) {
             building.setId("bld-" + UUID.randomUUID().toString().substring(0, 8));
         }
@@ -68,7 +82,7 @@ public class BuildingController {
 
         Building saved = repo.save(building);
 
-        addRoomsToTarget(saved, totalRooms);
+        addRoomsToTarget(building, totalRooms);
 
         logService.log("Building Created", "Created building " + building.getName() + " (" + building.getCode() + ") with " + totalRooms + " units");
         return ResponseEntity.ok(saved);
@@ -78,8 +92,8 @@ public class BuildingController {
     @Transactional
     public ResponseEntity<?> update(@PathVariable String id, @RequestBody Building incoming) {
         return repo.findById(id).map(existing -> {
-            int floors = incoming.getFloors() != null ? incoming.getFloors() : existing.getFloors();
-            int totalRooms = incoming.getTotalRooms() != null ? incoming.getTotalRooms() : existing.getTotalRooms();
+            int floors = incoming.getFloors() != null ? incoming.getFloors() : (existing.getFloors() != null ? existing.getFloors() : 1);
+            int totalRooms = incoming.getTotalRooms() != null ? incoming.getTotalRooms() : (existing.getTotalRooms() != null ? existing.getTotalRooms() : 1);
             if (!validConfig(floors, totalRooms)) return ResponseEntity.badRequest().body(java.util.Map.of("message", "Floors and room count must be positive integers."));
             List<Room> rooms = roomRepo.findByBuildingId(id);
             if (rooms.isEmpty()) rooms = roomRepo.findAll().stream().filter(r -> existing.getCode().equalsIgnoreCase(buildingCodeFromRoom(r.getRoomNumber()))).toList();
@@ -108,7 +122,7 @@ public class BuildingController {
 
             logService.log("Building Updated", "Updated building " + existing.getName());
             Building saved = repo.save(existing);
-            addRoomsToTarget(saved, totalRooms);
+            addRoomsToTarget(existing, totalRooms);
             return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
     }
@@ -119,6 +133,7 @@ public class BuildingController {
 
     private boolean isRoomSafeToRemove(Room room) {
         if (!"Available".equalsIgnoreCase(room.getStatus()) || room.getCurrentTenantId() != null) return false;
+        if (leaseRepo == null || bookingRepo == null || billRepo == null) return false;
         if (!leaseRepo.findByRoomIdAndStatusIn(room.getId(), List.of("Active", "Expired", "Terminated")).isEmpty()) return false;
         if (!bookingRepo.findByRoomIdAndStatusIn(room.getId(), List.of("Pending", "Approved")).isEmpty()) return false;
         return billRepo.findAll().stream().noneMatch(b -> room.getId().equals(b.getRoomId()));
