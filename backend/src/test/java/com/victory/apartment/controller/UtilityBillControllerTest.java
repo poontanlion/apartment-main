@@ -5,6 +5,8 @@ import com.victory.apartment.model.Room;
 import com.victory.apartment.model.UtilityBill;
 import com.victory.apartment.repository.RoomRepository;
 import com.victory.apartment.repository.UtilityBillRepository;
+import com.victory.apartment.repository.BillPaymentRepository;
+import com.victory.apartment.repository.BillingSettingsRepository;
 import com.victory.apartment.service.ActivityLogService;
 import com.victory.apartment.service.PriceRuleException;
 import com.victory.apartment.service.RentQuoteService;
@@ -42,6 +44,12 @@ public class UtilityBillControllerTest {
 
     @MockBean
     private UtilityBillRepository utilityBillRepository;
+
+    @MockBean
+    private BillPaymentRepository billPaymentRepository;
+
+    @MockBean
+    private BillingSettingsRepository billingSettingsRepository;
 
     @MockBean
     private RoomRepository roomRepository;

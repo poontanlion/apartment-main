@@ -17,7 +17,6 @@ export const BuildingManagement: React.FC = () => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBuilding, setEditingBuilding] = useState<Partial<Building> | null>(null);
-  const [unitsPerFloor, setUnitsPerFloor] = useState(12);
 
   useEffect(() => {
     loadData();
@@ -37,24 +36,20 @@ export const BuildingManagement: React.FC = () => {
   };
 
   const handleOpenAddModal = () => {
-    const floors = 2;
-    const units = 12;
     setEditingBuilding({
       name: '',
       code: '',
-      floors,
-      totalRooms: floors * units,
+      floors: 1,
+      totalRooms: 1,
       description: '',
       coverImage: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
       address: '',
     });
-    setUnitsPerFloor(units);
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (building: Building) => {
     setEditingBuilding(building);
-    setUnitsPerFloor(Math.max(1, Math.round(building.totalRooms / (building.floors || 1))));
     setIsModalOpen(true);
   };
 
@@ -80,7 +75,7 @@ export const BuildingManagement: React.FC = () => {
 
     try {
       const floorsNum = Number(editingBuilding.floors) || 1;
-      const totalUnitsNum = floorsNum * (Number(unitsPerFloor) || 1);
+      const totalUnitsNum = Number(editingBuilding.totalRooms) || 1;
       await saveBuilding({
         ...editingBuilding,
         floors: floorsNum,
@@ -93,8 +88,8 @@ export const BuildingManagement: React.FC = () => {
       );
       setIsModalOpen(false);
       loadData();
-    } catch {
-      toast.error(language === 'th' ? 'ไม่สามารถบันทึกข้อมูลอาคารได้' : 'Failed to save building data');
+    } catch (err) {
+      toast.error((err as Error).message || (language === 'th' ? 'ไม่สามารถบันทึกข้อมูลอาคารได้' : 'Failed to save building data'));
     }
   };
 
@@ -342,17 +337,13 @@ export const BuildingManagement: React.FC = () => {
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                    {language === 'th' ? 'จำนวนห้องต่อชั้น' : 'Units per Floor'}
+                    {language === 'th' ? 'จำนวนห้องทั้งหมด' : 'Total Rooms'}
                   </label>
                   <input
                     type="number"
                     min="1"
-                    value={unitsPerFloor}
-                    onChange={(e) => {
-                      const units = parseInt(e.target.value) || 1;
-                      setUnitsPerFloor(units);
-                      setEditingBuilding({ ...editingBuilding, totalRooms: (editingBuilding.floors || 1) * units });
-                    }}
+                    value={editingBuilding.totalRooms || 1}
+                    onChange={(e) => setEditingBuilding({ ...editingBuilding, totalRooms: parseInt(e.target.value) || 1 })}
                     className="w-full px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
                   />
                 </div>
@@ -366,7 +357,7 @@ export const BuildingManagement: React.FC = () => {
                     value={editingBuilding.floors || 1}
                     onChange={(e) => {
                       const floors = parseInt(e.target.value) || 1;
-                      setEditingBuilding({ ...editingBuilding, floors, totalRooms: floors * unitsPerFloor });
+                      setEditingBuilding({ ...editingBuilding, floors });
                     }}
                     className="w-full px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
                   />
@@ -376,7 +367,8 @@ export const BuildingManagement: React.FC = () => {
               {/* Total Units Banner */}
               <div className="bg-[#EEF2FF] dark:bg-indigo-950/40 border border-indigo-100/60 dark:border-indigo-900/40 rounded-2xl px-4 py-3 text-sm text-[#4338CA] dark:text-indigo-300 font-medium flex items-center">
                 {language === 'th' ? 'จำนวนห้องรวม: ' : 'Total Units: '}
-                <span className="font-bold ml-1.5">{(editingBuilding.floors || 1) * unitsPerFloor}</span>
+                <span className="font-bold ml-1.5">{editingBuilding.totalRooms || 1}</span>
+                {language === 'th' ? ` ห้อง / ${editingBuilding.floors || 1} ชั้น` : ` rooms / ${editingBuilding.floors || 1} floors`}
               </div>
 
               <div>

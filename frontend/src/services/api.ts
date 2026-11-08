@@ -1,7 +1,10 @@
 import {
-  Room, Tenant, Lease, UtilityBill, BillStatus, MaintenanceTask, SupplyItem,
+  Room, Tenant, Lease, UtilityBill, BillStatus, BillPayment, MaintenanceTask, SupplyItem,
   MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication,
-  RoomPrice, RoomPriceHistory, RentQuote, MaintenancePredictionFilters, MaintenancePredictionResponse, MaintenancePredictionRow
+
+  RoomPrice, RoomPriceHistory, RentQuote, MaintenancePredictionFilters, MaintenancePredictionResponse, MaintenancePredictionRow, 
+  SummaryReport, SummaryReportFilters
+
 } from '../types';
 import { BookingLeaseError } from '../utils/bookingLeaseErrors';
 import { BookingRequestError } from '../utils/bookingErrors';
@@ -245,6 +248,14 @@ export const saveUtilityBill = async (billData: Partial<UtilityBill>): Promise<U
   });
 };
 
+export const getBillingSettings = (): Promise<{ id: string; monthlyInterestRate: number }> =>
+  fetchJson<{ id: string; monthlyInterestRate: number }>(`${API_BASE}/billing-settings`);
+
+export const saveBillingSettings = (monthlyInterestRate: number): Promise<{ id: string; monthlyInterestRate: number }> =>
+  fetchJson<{ id: string; monthlyInterestRate: number }>(`${API_BASE}/billing-settings`, {
+    method: 'PUT', body: JSON.stringify({ monthlyInterestRate }),
+  });
+
 export const updateBillStatus = async (billId: string, status: BillStatus, slipImage?: string, scannedDocument?: string): Promise<UtilityBill | null> => {
   try {
     return await fetchJson<UtilityBill>(`${API_BASE}/utility-bills/${billId}/status`, {
@@ -254,6 +265,24 @@ export const updateBillStatus = async (billId: string, status: BillStatus, slipI
   } catch {
     return null;
   }
+};
+
+export const getBillPayments = (billId: string): Promise<BillPayment[]> =>
+  fetchJson<BillPayment[]>(`${API_BASE}/utility-bills/${billId}/payments`);
+
+export const addBillPayment = (billId: string, payload: { amount: number; note?: string; proofImage?: string }): Promise<{ bill: UtilityBill; payment: BillPayment }> =>
+  fetchJson<{ bill: UtilityBill; payment: BillPayment }>(`${API_BASE}/utility-bills/${billId}/payments`, { method: 'POST', body: JSON.stringify(payload) });
+
+// ----------------------------------------------------
+// SUMMARY REPORTS API
+// ----------------------------------------------------
+/** Lets errors through: a failed report must not read as a report of zero. */
+export const getSummaryReport = (filters: SummaryReportFilters, signal?: AbortSignal): Promise<SummaryReport> => {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([name, value]) => {
+    if (value) params.set(name, value);
+  });
+  return fetchJson<SummaryReport>(`${API_BASE}/reports/summary?${params}`, { signal });
 };
 
 // ----------------------------------------------------
