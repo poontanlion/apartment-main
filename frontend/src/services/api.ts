@@ -1,12 +1,38 @@
 import {
   Room, Tenant, Lease, UtilityBill, BillStatus, MaintenanceTask, SupplyItem,
   MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication,
-  RoomPrice, RoomPriceHistory, RentQuote
+  RoomPrice, RoomPriceHistory, RentQuote, MaintenancePredictionFilters, MaintenancePredictionResponse
 } from '../types';
 import { BookingLeaseError } from '../utils/bookingLeaseErrors';
 import { BookingRequestError } from '../utils/bookingErrors';
 
 const API_BASE = '/api';
+
+export class MaintenancePredictionApiError extends Error {
+  constructor(public readonly status: number) {
+    super(`Maintenance prediction request failed (${status})`);
+    this.name = 'MaintenancePredictionApiError';
+  }
+}
+
+// The existing relative /api URLs use fetch's same-origin session cookies.
+// Keep that behavior explicit here and retain the status for the admin access state.
+async function fetchPredictionJson<T>(url: string, options: RequestInit): Promise<T> {
+  const response = await fetch(url, { ...options, credentials: 'same-origin' });
+  if (!response.ok) throw new MaintenancePredictionApiError(response.status);
+  return response.json();
+}
+
+export const getMaintenancePredictions = (
+  filters: MaintenancePredictionFilters = {}, signal?: AbortSignal,
+): Promise<MaintenancePredictionResponse> => {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value);
+  return fetchPredictionJson(`${API_BASE}/maintenance/predictions${query.size ? `?${query}` : ''}`, { signal });
+};
+
+export const refreshMaintenancePredictions = (signal?: AbortSignal): Promise<{ success: number; failure: number }> =>
+  fetchPredictionJson(`${API_BASE}/maintenance/predictions/refresh`, { method: 'POST', signal });
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {

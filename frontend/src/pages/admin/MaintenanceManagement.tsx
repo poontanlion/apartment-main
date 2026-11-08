@@ -9,22 +9,34 @@ import {
   getNotifications, addNotification
 } from '../../services/api';
 import { formatCurrency, formatDate, formatSuppliesSummary } from '../../utils/formatters';
-import { Wrench, Plus, Package, History, BellRing, CheckCircle2, Clock, Search, Pencil, Trash2, DollarSign, Archive, FileText } from 'lucide-react';
+import { Wrench, Plus, Package, History, BellRing, CheckCircle2, Clock, Search, Pencil, Trash2, DollarSign, Archive, FileText, Calendar } from 'lucide-react';
+import { MaintenancePredictionsTab } from '../../components/admin/MaintenancePredictionsTab';
 import { ScannedDocumentModal } from '../../components/admin/ScannedDocumentModal';
 import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'sonner';
 
 // 'archived' is stored by the backend (MaintenanceTask.archived); declared locally so this page doesn't depend on the shared types file
 type TaskWithArchive = MaintenanceTask & { archived?: boolean };
+type MaintenanceTab = 'tasks' | 'supplies' | 'logs' | 'reminders' | 'predictions';
 
 export const MaintenanceManagement: React.FC = () => {
   const { t, language } = useLanguage();
-  const [searchParams] = useSearchParams();
-  const initialBuildingId = searchParams.get('buildingId') || 'All';
-
-  const [activeTab, setActiveTab] = useState<'tasks' | 'supplies' | 'logs' | 'reminders'>('tasks');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab: MaintenanceTab = ['tasks', 'supplies', 'logs', 'reminders', 'predictions'].includes(tabParam || '')
+    ? tabParam as MaintenanceTab : 'tasks';
+  const setActiveTab = (tab: MaintenanceTab) => setSearchParams(previous => {
+    const next = new URLSearchParams(previous);
+    next.set('tab', tab);
+    return next;
+  });
+  const buildingFilter = searchParams.get('buildingId') || 'All';
+  const setBuildingFilter = (building: string) => setSearchParams(previous => {
+    const next = new URLSearchParams(previous);
+    if (building === 'All') next.delete('buildingId'); else next.set('buildingId', building);
+    return next;
+  });
   const [occupancyFilter, setOccupancyFilter] = useState<'All' | 'Occupied' | 'Vacant/Common'>('All');
-  const [buildingFilter, setBuildingFilter] = useState<string>(initialBuildingId);
   const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
   const [supplies, setSupplies] = useState<SupplyItem[]>([]);
   const [logs, setLogs] = useState<MaintenanceLog[]>([]);
@@ -173,7 +185,7 @@ export const MaintenanceManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    if (activeTab !== 'predictions') fetchData();
   }, [activeTab]);
 
   const handleAddSupplyToTask = () => {
@@ -400,7 +412,7 @@ export const MaintenanceManagement: React.FC = () => {
       </div>
 
       {/* NAVIGATION TABS */}
-      <div className="flex border-b border-nike-hairline dark:border-nike-dark-card gap-4">
+      <div className="flex overflow-x-auto whitespace-nowrap border-b border-nike-hairline dark:border-nike-dark-card gap-4">
         <button
           onClick={() => setActiveTab('tasks')}
           className={`pb-3 text-sm font-semibold flex items-center gap-2 transition-all border-b-2 ${
@@ -436,7 +448,17 @@ export const MaintenanceManagement: React.FC = () => {
         >
           <BellRing className="w-4 h-4" /> {t('mnt.reminders')}
         </button>
+        <button
+          onClick={() => setActiveTab('predictions')}
+          className={`pb-3 text-sm font-semibold flex items-center gap-2 transition-all border-b-2 ${
+            activeTab === 'predictions' ? 'border-rose-600 text-rose-600 dark:text-rose-400' : 'border-transparent text-nike-mute'
+          }`}
+        >
+          <Calendar className="w-4 h-4" /> {t('mnt.predictions.title')}
+        </button>
       </div>
+
+      {activeTab === 'predictions' && <MaintenancePredictionsTab buildingId={buildingFilter === 'All' ? undefined : buildingFilter} />}
 
       {/* TAB 1: MAINTENANCE TASKS */}
       {activeTab === 'tasks' && (
