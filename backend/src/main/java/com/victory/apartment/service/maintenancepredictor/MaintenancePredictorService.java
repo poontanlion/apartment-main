@@ -25,10 +25,12 @@ public class MaintenancePredictorService {
     private final MaintenancePredictionRepository predictions;
     private final Clock clock;
     private final TransactionTemplate transaction;
+    private final MaintenancePredictionDigestService digest;
 
     public MaintenancePredictorService(RoomRepository rooms, MaintenanceTaskTypeRepository types,
             MaintenanceLogRepository logs, LeaseRepository leases,
-            MaintenancePredictionRepository predictions, Clock clock, PlatformTransactionManager transactionManager) {
+            MaintenancePredictionRepository predictions, Clock clock, PlatformTransactionManager transactionManager,
+            MaintenancePredictionDigestService digest) {
         this.rooms = rooms;
         this.types = types;
         this.logs = logs;
@@ -37,6 +39,7 @@ public class MaintenancePredictorService {
         this.clock = clock.withZone(PredictionConfig.ZONE);
         this.transaction = new TransactionTemplate(transactionManager);
         this.transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.digest = digest;
     }
 
     /** Missing rooms and non-recurring types are skipped without persistence. */
@@ -100,6 +103,11 @@ public class MaintenancePredictorService {
                     logger.error("Prediction refresh failed for room {} task type {}", room.getId(), type.getId(), exception);
                 }
             }
+        }
+        try {
+            digest.sendDailyDigest();
+        } catch (RuntimeException exception) {
+            logger.error("Maintenance prediction digest failed; refresh result retained", exception);
         }
         return new RefreshResult(success, failure);
     }

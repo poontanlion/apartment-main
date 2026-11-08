@@ -18,7 +18,8 @@ class MaintenancePredictorServiceTest {
     private final Clock clock=Clock.fixed(Instant.parse("2026-11-07T18:00:00Z"),ZoneOffset.UTC);
     private final org.springframework.transaction.PlatformTransactionManager transactionManager =
             mock(org.springframework.transaction.PlatformTransactionManager.class);
-    private final MaintenancePredictorService service=new MaintenancePredictorService(rooms,types,logs,leases,predictions,clock,transactionManager);
+    private final MaintenancePredictionDigestService digest = mock(MaintenancePredictionDigestService.class);
+    private final MaintenancePredictorService service=new MaintenancePredictorService(rooms,types,logs,leases,predictions,clock,transactionManager,digest);
     private final MaintenanceTaskType type=new MaintenanceTaskType();
     @BeforeEach void setup() {
         type.setId("mtt-light");type.setCode("LIGHT");type.setIsRecurring(true);type.setDefaultIntervalDays(365);
@@ -121,5 +122,13 @@ class MaintenancePredictorServiceTest {
                 () -> service.recalculate("rm-A101", type.getId()));
         verify(predictions, times(2)).saveAndFlush(any());
         verify(transactionManager, times(2)).rollback(any());
+    }
+
+    @Test void notificationFailureDoesNotFailRefresh() {
+        when(rooms.findAll()).thenReturn(List.of());
+        when(types.findAll()).thenReturn(List.of());
+        when(digest.sendDailyDigest()).thenThrow(new IllegalStateException("notification unavailable"));
+        assertEquals(new MaintenancePredictorService.RefreshResult(0, 0), service.refreshAll());
+        verify(digest).sendDailyDigest();
     }
 }
