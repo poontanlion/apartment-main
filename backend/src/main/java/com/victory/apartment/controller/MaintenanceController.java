@@ -3,6 +3,7 @@ package com.victory.apartment.controller;
 import com.victory.apartment.model.*;
 import com.victory.apartment.repository.*;
 import com.victory.apartment.service.ActivityLogService;
+import com.victory.apartment.service.maintenancepredictor.MaintenancePredictionTrigger;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +24,7 @@ public class MaintenanceController {
     private final AppNotificationRepository notifRepo;
     private final RoomRepository roomRepo;
     private final ActivityLogService activityLogService;
+    private final MaintenancePredictionTrigger predictionTrigger;
 
     public MaintenanceController(
             MaintenanceTaskRepository taskRepo,
@@ -31,7 +33,8 @@ public class MaintenanceController {
             ScheduledReminderRepository reminderRepo,
             AppNotificationRepository notifRepo,
             RoomRepository roomRepo,
-            ActivityLogService activityLogService) {
+            ActivityLogService activityLogService,
+            MaintenancePredictionTrigger predictionTrigger) {
         this.taskRepo = taskRepo;
         this.supplyRepo = supplyRepo;
         this.logRepo = logRepo;
@@ -39,6 +42,7 @@ public class MaintenanceController {
         this.notifRepo = notifRepo;
         this.roomRepo = roomRepo;
         this.activityLogService = activityLogService;
+        this.predictionTrigger = predictionTrigger;
     }
 
     // === MAINTENANCE TASKS ===
@@ -72,6 +76,8 @@ public class MaintenanceController {
 
     @PostMapping("/maintenance-tasks")
     public MaintenanceTask createTask(@RequestBody MaintenanceTask task) {
+        boolean newlyCompleted = "Completed".equals(task.getStatus()) && (task.getId() == null
+                || taskRepo.findById(task.getId()).map(old -> !"Completed".equals(old.getStatus())).orElse(true));
         if (task.getId() == null || task.getId().isEmpty()) {
             task.setId("mt-" + UUID.randomUUID().toString().substring(0, 8));
             task.setTaskNo(String.format("MNT-%tY%tm-%s", LocalDateTime.now(), LocalDateTime.now(), UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase()));
@@ -90,7 +96,7 @@ public class MaintenanceController {
         MaintenanceTask saved = taskRepo.save(task);
 
         // Always sync/add to maintenance log so per-unit history is always up to date!
-        syncOrAddMaintenanceLogFromTask(saved);
+        syncOrAddMaintenanceLogFromTask(saved, newlyCompleted, true);
 
         // Auto-create notification for Admin
         AppNotification notif = new AppNotification();
@@ -114,6 +120,7 @@ public class MaintenanceController {
     @PutMapping("/maintenance-tasks/{id}")
     public ResponseEntity<MaintenanceTask> updateTask(@PathVariable String id, @RequestBody MaintenanceTask incoming) {
         return taskRepo.findById(id).map(existing -> {
+            boolean newlyCompleted = !"Completed".equals(existing.getStatus()) && "Completed".equals(incoming.getStatus());
             if (incoming.getStatus() != null) existing.setStatus(incoming.getStatus());
             if (incoming.getCategory() != null) existing.setCategory(incoming.getCategory());
             if (incoming.getDescription() != null) existing.setDescription(incoming.getDescription());
@@ -131,11 +138,12 @@ public class MaintenanceController {
             }
 
             // Always sync/update maintenance log
-            syncOrAddMaintenanceLogFromTask(existing);
+            MaintenanceTask saved = taskRepo.save(existing);
+            syncOrAddMaintenanceLogFromTask(saved, newlyCompleted, true);
 
             activityLogService.log("Maintenance Task Updated",
                 String.format("Task %s for Unit %s set to %s", existing.getTaskNo(), existing.getRoomNumber(), existing.getStatus()));
-            return ResponseEntity.ok(taskRepo.save(existing));
+            return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -153,6 +161,10 @@ public class MaintenanceController {
     }
 
     private void syncOrAddMaintenanceLogFromTask(MaintenanceTask task) {
+        syncOrAddMaintenanceLogFromTask(task, false, false);
+    }
+
+    private void syncOrAddMaintenanceLogFromTask(MaintenanceTask task, boolean newlyCompleted, boolean trigger) {
         List<MaintenanceLog> existingLogs = logRepo.findByTaskNo(task.getTaskNo());
         MaintenanceLog log;
         if (!existingLogs.isEmpty()) {
@@ -163,6 +175,8 @@ public class MaintenanceController {
             log.setDate(task.getCreatedAt() != null ? task.getCreatedAt().toLocalDate().toString() : java.time.LocalDate.now().toString());
             log.setTaskNo(task.getTaskNo());
         }
+        String oldRoomId = log.getRoomId();
+        String oldTaskTypeId = log.getTaskTypeId();
         log.setRoomId(task.getRoomId());
         log.setRoomNumber(task.getRoomNumber());
         log.setCategory(task.getCategory());
@@ -171,7 +185,14 @@ public class MaintenanceController {
         log.setTotalCost(task.getTotalCost() != null ? task.getTotalCost() : (task.getLaborCost() != null ? task.getLaborCost() : 0.0));
         log.setPerformedBy(task.getAssignedWorker() != null && !task.getAssignedWorker().isEmpty() ? task.getAssignedWorker() : "ช่างประจำอาคาร");
         if (task.getScannedDocument() != null) log.setScannedDocument(task.getScannedDocument());
+        predictionTrigger.prepare(log, task, newlyCompleted);
         logRepo.save(log);
+        if (trigger) {
+            predictionTrigger.recalculateSafely(log.getRoomId(), log.getTaskTypeId());
+            if (!java.util.Objects.equals(oldRoomId, log.getRoomId())
+                    || !java.util.Objects.equals(oldTaskTypeId, log.getTaskTypeId()))
+                predictionTrigger.recalculateSafely(oldRoomId, oldTaskTypeId);
+        }
     }
 
     // === SUPPLIES ===
@@ -373,10 +394,18 @@ public class MaintenanceController {
 
     @PostMapping("/maintenance-logs")
     public MaintenanceLog createLog(@RequestBody MaintenanceLog log) {
+        MaintenanceLog old = log.getId() == null ? null : logRepo.findById(log.getId()).orElse(null);
         if (log.getId() == null || log.getId().isEmpty()) {
             log.setId("log-" + UUID.randomUUID().toString().substring(0, 8));
         }
+        // Ignore client-supplied derived metadata; resolve it from category/task/date.
+        log.setCompletedDate(old == null ? null : old.getCompletedDate());
+        prepareLog(log);
         MaintenanceLog saved = logRepo.save(log);
+        predictionTrigger.recalculateSafely(saved.getRoomId(), saved.getTaskTypeId());
+        if (old != null && (!java.util.Objects.equals(old.getRoomId(), saved.getRoomId())
+                || !java.util.Objects.equals(old.getTaskTypeId(), saved.getTaskTypeId())))
+            predictionTrigger.recalculateSafely(old.getRoomId(), old.getTaskTypeId());
         recalculateAndDeductSuppliesStock();
         return saved;
     }
@@ -384,15 +413,26 @@ public class MaintenanceController {
     @PutMapping("/maintenance-logs/{id}")
     public ResponseEntity<MaintenanceLog> updateLog(@PathVariable String id, @RequestBody MaintenanceLog incoming) {
         return logRepo.findById(id).map(existing -> {
+            String oldTaskTypeId = existing.getTaskTypeId();
             if (incoming.getDescription() != null) existing.setDescription(incoming.getDescription());
             if (incoming.getSuppliesSummary() != null) existing.setSuppliesSummary(incoming.getSuppliesSummary());
             if (incoming.getTotalCost() != null) existing.setTotalCost(incoming.getTotalCost());
             if (incoming.getPerformedBy() != null) existing.setPerformedBy(incoming.getPerformedBy());
             if (incoming.getScannedDocument() != null) existing.setScannedDocument(incoming.getScannedDocument());
+            prepareLog(existing);
             MaintenanceLog saved = logRepo.save(existing);
+            predictionTrigger.recalculateSafely(saved.getRoomId(), saved.getTaskTypeId());
+            if (!java.util.Objects.equals(oldTaskTypeId, saved.getTaskTypeId()))
+                predictionTrigger.recalculateSafely(saved.getRoomId(), oldTaskTypeId);
             recalculateAndDeductSuppliesStock();
             return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    private void prepareLog(MaintenanceLog log) {
+        MaintenanceTask task = log.getTaskNo() == null || log.getTaskNo().isBlank() ? null
+                : taskRepo.findByTaskNo(log.getTaskNo()).orElse(null);
+        predictionTrigger.prepare(log, task, false);
     }
 
     @DeleteMapping("/maintenance-logs/{id}")
