@@ -7,9 +7,9 @@ SET total_due = CASE
 END;
 
 UPDATE utility_bills
-SET outstanding_balance = GREATEST(COALESCE(total_due, total_amount, 0) - COALESCE(paid_amount, 0), 0),
+SET outstanding_balance = GREATEST(COALESCE(total_due, total_amount, 0) - COALESCE(amount_paid, 0), 0),
     status = CASE
-        WHEN GREATEST(COALESCE(total_due, total_amount, 0) - COALESCE(paid_amount, 0), 0) <= 0 THEN 'Paid'
-        WHEN COALESCE(paid_amount, 0) > 0 THEN 'Partial'
-        ELSE 'Unpaid'
+        WHEN GREATEST(COALESCE(total_due, total_amount, 0) - COALESCE(amount_paid, 0), 0) <= 0 THEN 'Paid'
+        WHEN COALESCE(amount_paid, 0) > 0 THEN 'Partial'
+        ELSE 'Pending'
     END;
