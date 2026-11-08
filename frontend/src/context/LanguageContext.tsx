@@ -10,6 +10,13 @@ interface LanguageContextType {
 }
 
 const translations: Record<string, Record<Language, string>> = {
+  'smartSearch.placeholder': { th: 'ค้นหาชื่อผู้เช่า…', en: 'Search tenant name…' },
+  'smartSearch.hint': { th: 'ค้นหาชื่อผู้เช่าได้แม้พิมพ์คลาดเคลื่อนเล็กน้อย', en: 'Find tenant names even with small typos' },
+  'smartSearch.label': { th: 'ค้นหาชื่อผู้เช่า', en: 'Search tenant names' },
+  'smartSearch.clear': { th: 'ล้างคำค้น', en: 'Clear search' },
+  'smartSearch.noResults': { th: 'ไม่พบผลลัพธ์สำหรับ “{query}”', en: 'No results for “{query}”' },
+  'smartSearch.resultCount': { th: 'พบ {count} รายการ', en: '{count} results' },
+  'smartSearch.fuzzyOnly': { th: 'ไม่พบตรงตัว แสดงผลที่ใกล้เคียง', en: 'No direct matches. Showing similar results.' },
   'mnt.predictions.dashboardTitle': { th: 'งานบำรุงรักษาใกล้ถึงกำหนด', en: 'Upcoming maintenance' },
   'mnt.predictions.dashboardEmpty': { th: 'ยังไม่มีข้อมูลคาดการณ์', en: 'No maintenance prediction data yet' },
   'mnt.predictions.viewPredictions': { th: 'ดูรายการคาดการณ์', en: 'View maintenance predictions' },

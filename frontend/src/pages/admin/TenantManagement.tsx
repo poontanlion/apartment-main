@@ -1,12 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Tenant, Lease, Room } from '../../types';
 import { getTenants, saveTenant, deleteTenant, getLeases, saveLease, terminateLease, getRooms, getRoomPriceForMonth } from '../../services/api';
 import { formatCurrency, formatDate } from '../../utils/formatters';
-import { Users, UserPlus, FileSignature, Phone, Mail, CheckCircle2, Printer, Plus, Trash2, Edit3, Home, Search } from 'lucide-react';
+import { Users, UserPlus, FileSignature, Phone, Mail, CheckCircle2, Printer, Plus, Trash2, Edit3, Home } from 'lucide-react';
 import { ContractModal } from '../../components/admin/ContractModal';
 import { ScannedDocumentModal } from '../../components/admin/ScannedDocumentModal';
 import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'sonner';
+import { useFuzzySearch } from '../../hooks/useFuzzySearch';
+import { SmartSearchInput } from '../../components/common/SmartSearchInput';
+import { HighlightedText } from '../../components/common/HighlightedText';
 
 export const TenantManagement: React.FC = () => {
   const { t, language } = useLanguage();
@@ -14,6 +17,7 @@ export const TenantManagement: React.FC = () => {
   const [leases, setLeases] = useState<Lease[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [search, setSearch] = useState('');
+  const [leaseQuery, setLeaseQuery] = useState('');
 
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [tenantFormData, setTenantFormData] = useState<Partial<Tenant>>({});
@@ -130,11 +134,23 @@ export const TenantManagement: React.FC = () => {
     }
   };
 
-  const filteredTenants = tenants.filter(t =>
-    (t.fullname || '').toLowerCase().includes(search.toLowerCase()) ||
-    (t.phone || '').includes(search) ||
-    (t.unitNumber || '').includes(search)
-  );
+  const getTenantSearchTexts = useCallback((tenant: Tenant): string[] => [
+    tenant.fullname || '',
+    tenant.phone || '',
+    tenant.unitNumber || '',
+    ...leases.filter(lease => lease.tenantId === tenant.id).map(lease => lease.tenantName || ''),
+    ...rooms.filter(room => room.currentTenantId === tenant.id).map(room => room.currentTenantName || ''),
+  ], [leases, rooms]);
+  const { results, debouncedQuery, hasFuzzyOnly } = useFuzzySearch(tenants, search, getTenantSearchTexts);
+  const hasSearch = debouncedQuery.trim().length > 0;
+  const filteredTenants = hasSearch ? results.map(result => result.item) : tenants;
+  const getLeaseSearchTexts = useCallback((lease: Lease): string[] => [
+    lease.tenantName || '', lease.roomNumber || '', lease.id,
+    tenants.find(tenant => tenant.id === lease.tenantId)?.fullname || '',
+  ], [tenants]);
+  const leaseSearch = useFuzzySearch(leases, leaseQuery, getLeaseSearchTexts);
+  const hasLeaseSearch = leaseSearch.debouncedQuery.trim().length > 0;
+  const filteredLeases = hasLeaseSearch ? leaseSearch.results.map(result => result.item) : leases;
 
   return (
     <div className="space-y-8 pb-10">
@@ -191,12 +207,21 @@ export const TenantManagement: React.FC = () => {
 
       {/* ACTIVE LEASES TABLE SECTION */}
       <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card rounded-2xl p-6 space-y-4 shadow-xs">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <h3 className="text-lg font-bold text-nike-ink dark:text-white flex items-center gap-2">
             <FileSignature className="w-5 h-5 text-blue-600" />
             {t('tnt.activeAgreementSection')}
           </h3>
+          <SmartSearchInput value={leaseQuery} onChange={setLeaseQuery} resultCount={filteredLeases.length} />
         </div>
+
+        {hasLeaseSearch && (filteredLeases.length === 0 || leaseSearch.hasFuzzyOnly) && (
+          <p role="status" className="text-xs text-nike-mute dark:text-nike-stone">
+            {filteredLeases.length === 0
+              ? t('smartSearch.noResults').replace('{query}', () => leaseSearch.debouncedQuery)
+              : t('smartSearch.fuzzyOnly')}
+          </p>
+        )}
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
@@ -212,13 +237,13 @@ export const TenantManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-nike-hairline/60 dark:divide-nike-dark-card/60">
-              {leases.map((lease) => (
+              {filteredLeases.map((lease) => (
                 <tr key={lease.id} className="hover:bg-nike-soft-cloud/50 dark:hover:bg-nike-dark-card/30">
                   <td className="p-3 font-bold text-nike-ink dark:text-white text-sm">
                     {t('common.unit')} {lease.roomNumber}
                   </td>
                   <td className="p-3 font-medium text-nike-ink dark:text-white">
-                    {lease.tenantName}
+                    <HighlightedText text={lease.tenantName || ''} query={leaseSearch.debouncedQuery} />
                     <span className="block text-[11px] text-nike-stone">{lease.tenantPhone}</span>
                   </td>
                   <td className="p-3 text-nike-mute dark:text-nike-stone">
@@ -280,29 +305,31 @@ export const TenantManagement: React.FC = () => {
 
       {/* TENANTS DIRECTORY TABLE */}
       <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card rounded-2xl p-6 space-y-4 shadow-xs">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-wrap justify-between items-start gap-4">
           <h3 className="text-lg font-bold text-nike-ink dark:text-white flex items-center gap-2">
             <Users className="w-5 h-5 text-blue-600" />
             {t('tnt.tenantList')}
           </h3>
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-nike-mute" />
-            <input
-              type="text"
-              placeholder="Search name, phone or unit..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-nike-soft-cloud dark:bg-nike-dark-surface border border-nike-hairline dark:border-nike-dark-card text-nike-ink dark:text-white focus:outline-none"
-            />
-          </div>
+          <SmartSearchInput value={search} onChange={setSearch}
+            resultCount={filteredTenants.length} />
         </div>
+
+        {hasSearch && (filteredTenants.length === 0 || hasFuzzyOnly) && (
+          <p role="status" className="text-xs text-nike-mute dark:text-nike-stone">
+            {filteredTenants.length === 0
+              ? t('smartSearch.noResults').replace('{query}', () => debouncedQuery)
+              : t('smartSearch.fuzzyOnly')}
+          </p>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredTenants.map((tenant) => (
             <div key={tenant.id} className="p-4 rounded-xl border border-nike-hairline dark:border-nike-dark-card bg-nike-soft-cloud/40 dark:bg-nike-dark-surface space-y-3">
               <div className="flex justify-between items-start">
                 <div>
-                  <h4 className="font-bold text-nike-ink dark:text-white text-base">{tenant.fullname}</h4>
+                  <h4 className="font-bold text-nike-ink dark:text-white text-base">
+                    <HighlightedText text={tenant.fullname || ''} query={debouncedQuery} />
+                  </h4>
                   <span className="text-xs text-nike-stone block">ID / Passport: {tenant.idCardPassport || '-'}</span>
                 </div>
                 <div className="flex gap-1">

@@ -1,17 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Lease, MaintenanceTask, UtilityBill } from '../../types';
 import { getLeases, saveLease, getMaintenanceTasks, saveMaintenanceTask, getUtilityBills, updateBillStatus } from '../../services/api';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { ScannedDocumentModal } from '../../components/admin/ScannedDocumentModal';
 import { useLanguage } from '../../context/LanguageContext';
 import {
-  FolderArchive, FileSignature, Wrench, Receipt, Search,
+  FolderArchive, FileSignature, Wrench, Receipt,
   Eye, Upload, CheckCircle2, AlertCircle, ExternalLink, Filter
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useFuzzySearch } from '../../hooks/useFuzzySearch';
+import { SmartSearchInput } from '../../components/common/SmartSearchInput';
+import { HighlightedText } from '../../components/common/HighlightedText';
+
+const getLeaseSearchTexts = (lease: Lease): string[] => [lease.tenantName || '', lease.roomNumber || '', lease.id];
+const getTaskSearchTexts = (task: MaintenanceTask): string[] => [
+  task.roomNumber || '', task.taskNo || '', task.category || '', task.description || '',
+];
+const matchesDocumentFilter = (item: { scannedDocument?: string }, mode: 'all' | 'has_doc' | 'no_doc'): boolean =>
+  mode === 'has_doc' ? !!item.scannedDocument : mode === 'no_doc' ? !item.scannedDocument : true;
 
 export const DocumentRepository: React.FC = () => {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'leases' | 'maintenance' | 'bills'>('leases');
   const [search, setSearch] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'has_doc' | 'no_doc'>('all');
@@ -53,38 +63,24 @@ export const DocumentRepository: React.FC = () => {
     fetchData();
   }, []);
 
-  // Filtered lists
-  const filteredLeases = leases.filter(l => {
-    const matchSearch = (l.roomNumber?.toLowerCase().includes(search.toLowerCase()) ||
-                         l.tenantName?.toLowerCase().includes(search.toLowerCase()) ||
-                         l.id.toLowerCase().includes(search.toLowerCase()));
-    if (!matchSearch) return false;
-    if (filterMode === 'has_doc') return !!l.scannedDocument;
-    if (filterMode === 'no_doc') return !l.scannedDocument;
-    return true;
-  });
-
-  const filteredTasks = tasks.filter(t => {
-    const matchSearch = (t.roomNumber?.toLowerCase().includes(search.toLowerCase()) ||
-                         t.taskNo?.toLowerCase().includes(search.toLowerCase()) ||
-                         t.category?.toLowerCase().includes(search.toLowerCase()) ||
-                         t.description?.toLowerCase().includes(search.toLowerCase()));
-    if (!matchSearch) return false;
-    if (filterMode === 'has_doc') return !!t.scannedDocument;
-    if (filterMode === 'no_doc') return !t.scannedDocument;
-    return true;
-  });
-
-  const filteredBills = bills.filter(b => {
-    const matchSearch = (b.roomNumber?.toLowerCase().includes(search.toLowerCase()) ||
-                         b.invoiceNo?.toLowerCase().includes(search.toLowerCase()) ||
-                         b.tenantName?.toLowerCase().includes(search.toLowerCase()) ||
-                         b.billingMonth?.toLowerCase().includes(search.toLowerCase()));
-    if (!matchSearch) return false;
-    if (filterMode === 'has_doc') return !!b.scannedDocument;
-    if (filterMode === 'no_doc') return !b.scannedDocument;
-    return true;
-  });
+  const getBillSearchTexts = useCallback((bill: UtilityBill): string[] => [
+    bill.tenantName || '', bill.roomNumber || '', bill.invoiceNo || '', bill.billingMonth || '',
+    leases.find(lease => lease.id === bill.leaseId)?.tenantName || '',
+  ], [leases]);
+  const leaseSearch = useFuzzySearch(leases, search, getLeaseSearchTexts);
+  const taskSearch = useFuzzySearch(tasks, search, getTaskSearchTexts);
+  const billSearch = useFuzzySearch(bills, search, getBillSearchTexts);
+  const leaseResults = leaseSearch.results.filter(result => matchesDocumentFilter(result.item, filterMode));
+  const taskResults = taskSearch.results.filter(result => matchesDocumentFilter(result.item, filterMode));
+  const billResults = billSearch.results.filter(result => matchesDocumentFilter(result.item, filterMode));
+  const filteredLeases = leaseResults.map(result => result.item);
+  const filteredTasks = taskResults.map(result => result.item);
+  const filteredBills = billResults.map(result => result.item);
+  const activeSearch = activeTab === 'leases' ? leaseSearch : activeTab === 'maintenance' ? taskSearch : billSearch;
+  const activeResults = activeTab === 'leases' ? leaseResults : activeTab === 'maintenance' ? taskResults : billResults;
+  const { debouncedQuery } = activeSearch;
+  const hasSearch = debouncedQuery.trim().length > 0;
+  const hasFuzzyOnly = activeResults.length > 0 && activeResults.every(result => result.kind === 'fuzzy');
 
   // Counts
   const leaseAttached = leases.filter(l => !!l.scannedDocument).length;
@@ -224,7 +220,7 @@ export const DocumentRepository: React.FC = () => {
       <div className="bg-nike-canvas dark:bg-nike-dark-elevated border border-nike-hairline dark:border-nike-dark-card rounded-2xl p-6 space-y-5 shadow-xs">
 
         {/* TABS & SEARCH CONTROLS */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-nike-hairline dark:border-nike-dark-card pb-4">
+        <div className="flex flex-wrap justify-between items-start gap-4 border-b border-nike-hairline dark:border-nike-dark-card pb-4">
           <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto">
             <button
               onClick={() => setActiveTab('leases')}
@@ -262,8 +258,8 @@ export const DocumentRepository: React.FC = () => {
           </div>
 
           {/* SEARCH & FILTER */}
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <div className="flex bg-nike-soft-cloud dark:bg-nike-dark-surface p-1 rounded-xl border border-nike-hairline dark:border-nike-dark-card text-xs">
+          <div className="flex flex-wrap items-start justify-end gap-3 w-full">
+            <div className="flex shrink-0 whitespace-nowrap bg-nike-soft-cloud dark:bg-nike-dark-surface p-1 rounded-xl border border-nike-hairline dark:border-nike-dark-card text-xs">
               <button
                 onClick={() => setFilterMode('all')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${filterMode === 'all' ? 'bg-white dark:bg-slate-800 text-nike-ink dark:text-white shadow-xs' : 'text-nike-mute'}`}
@@ -284,18 +280,18 @@ export const DocumentRepository: React.FC = () => {
               </button>
             </div>
 
-            <div className="relative flex-1 sm:w-56">
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-nike-mute" />
-              <input
-                type="text"
-                placeholder={language === 'th' ? 'ค้นหาเลขห้อง/ชื่อ...' : 'Search unit or name...'}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-nike-soft-cloud dark:bg-nike-dark-surface border border-nike-hairline dark:border-nike-dark-card text-nike-ink dark:text-white focus:outline-none"
-              />
-            </div>
+            <SmartSearchInput value={search} onChange={setSearch}
+              resultCount={activeResults.length} />
           </div>
         </div>
+
+        {hasSearch && (activeResults.length === 0 || hasFuzzyOnly) && (
+          <p role="status" className="text-xs text-nike-mute dark:text-nike-stone">
+            {activeResults.length === 0
+              ? t('smartSearch.noResults').replace('{query}', () => debouncedQuery)
+              : t('smartSearch.fuzzyOnly')}
+          </p>
+        )}
 
         {/* TAB 1: LEASES TABLE */}
         {activeTab === 'leases' && (
@@ -319,7 +315,7 @@ export const DocumentRepository: React.FC = () => {
                       <span className="text-[11px] text-nike-stone">Ref: #{lease.id}</span>
                     </td>
                     <td className="p-3 font-medium text-nike-ink dark:text-white">
-                      {lease.tenantName}
+                      <HighlightedText text={lease.tenantName || ''} query={leaseSearch.debouncedQuery} />
                       <span className="block text-[11px] text-nike-stone">{lease.tenantPhone}</span>
                     </td>
                     <td className="p-3 text-nike-mute dark:text-nike-stone">
@@ -460,7 +456,7 @@ export const DocumentRepository: React.FC = () => {
                       {bill.billingMonth}
                     </td>
                     <td className="p-3 font-medium text-nike-ink dark:text-white">
-                      {bill.tenantName || '-'}
+                      <HighlightedText text={bill.tenantName || '-'} query={billSearch.debouncedQuery} />
                     </td>
                     <td className="p-3 font-bold text-nike-ink dark:text-white text-sm">
                       {formatCurrency(bill.totalAmount)}
