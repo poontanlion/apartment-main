@@ -19,6 +19,7 @@ const removeEmojis = (text: string): string => {
 
 export const getNotificationTargetUrl = (title: string, message?: string, type?: string): string => {
   const text = `${title} ${message || ''}`.toLowerCase();
+  if (text.includes('/admin/maintenance?tab=predictions')) return '/admin/maintenance?tab=predictions';
   if (type === 'inventory' || text.includes('low inventory') || text.includes('low stock') || text.includes('ใกล้หมด')) {
     return '/admin/maintenance?tab=supplies';
   }
@@ -43,8 +44,10 @@ export const getNotificationTargetUrl = (title: string, message?: string, type?:
   return '/admin/dashboard';
 };
 
-const getTargetPageLabel = (targetUrl: string, language: string): string => {
+const getTargetPageLabel = (targetUrl: string, language: string, t: (key: string) => string): string => {
   switch (targetUrl) {
+    case '/admin/maintenance?tab=predictions':
+      return t('mnt.predictions.viewPredictions');
     case '/admin/maintenance?tab=supplies':
       return language === 'th' ? 'ไปยังคลังสต็อกอะไหล่' : 'View Spare Parts Inventory';
     case '/admin/bookings':
@@ -216,7 +219,7 @@ export const NotificationCenter: React.FC = () => {
             const displayTitle = removeEmojis(n.title);
             const displayMessage = removeEmojis(n.message);
             const targetUrl = getNotificationTargetUrl(n.title, n.message, n.type);
-            const targetLabel = getTargetPageLabel(targetUrl, language);
+            const targetLabel = getTargetPageLabel(targetUrl, language, t);
 
             return (
               <div

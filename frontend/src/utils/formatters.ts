@@ -21,6 +21,19 @@ export const formatDate = (dateString: string): string => {
   }
 };
 
+/** Date-only values already represent Bangkok calendar dates. Never convert them to instants. */
+export const formatDateDMY = (value: string | null | undefined): string => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return '—';
+  const [year, month, day] = value.split('-');
+  const y = Number(year);
+  const m = Number(month);
+  const d = Number(day);
+  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+  const monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (m < 1 || m > 12 || d < 1 || d > monthDays[m - 1]) return '—';
+  return `${day}/${month}/${year}`;
+};
+
 export const calculateNights = (checkIn: string, checkOut: string): number => {
   if (!checkIn || !checkOut) return 1;
   const start = new Date(checkIn);

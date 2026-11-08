@@ -305,3 +305,39 @@ export interface ActivityLog {
   details: string;
   createdAt: string;
 }
+export type MaintenancePredictionStatus = 'overdue' | 'due_soon' | 'within_30' | 'on_track' | 'no_data';
+
+export interface MaintenancePredictionRow {
+  roomId: string;
+  roomNumber: string;
+  buildingId: string | null;
+  buildingName: string | null;
+  taskTypeId: string;
+  taskTypeNameTh: string;
+  taskTypeNameEn: string;
+  predictedDate: string | null;
+  daysRemaining: number | null;
+  status: MaintenancePredictionStatus;
+  hasAppointment: boolean;
+  appointmentDate: string | null;
+}
+
+export interface MaintenancePredictionSummary {
+  overdue: number;
+  dueSoon: number;
+  within30: number;
+  total: number;
+}
+
+export interface MaintenancePredictionResponse {
+  predictions: MaintenancePredictionRow[];
+  summary: MaintenancePredictionSummary;
+}
+
+export interface MaintenancePredictionFilters {
+  roomId?: string;
+  taskTypeId?: string;
+  buildingId?: string;
+  status?: string;
+  q?: string;
+}

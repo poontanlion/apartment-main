@@ -63,6 +63,9 @@ public class MaintenanceControllerTest {
     @MockBean
     private ActivityLogService activityLogService;
 
+    @MockBean
+    private com.victory.apartment.service.maintenancepredictor.MaintenancePredictionTrigger predictionTrigger;
+
     @Autowired
     private ObjectMapper objectMapper;
 

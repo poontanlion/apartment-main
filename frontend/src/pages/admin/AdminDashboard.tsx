@@ -10,6 +10,7 @@ import {
 } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import { ApartmentFloorGrid } from '../../components/admin/ApartmentFloorGrid';
+import { MaintenancePredictionsDashboardCard } from '../../components/admin/MaintenancePredictionsDashboardCard';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'sonner';
@@ -226,6 +227,8 @@ export const AdminDashboard: React.FC = () => {
       </div>
 
       {/* LOWER WIDGETS */}
+      <MaintenancePredictionsDashboardCard />
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
         {/* SCHEDULED REMINDERS */}

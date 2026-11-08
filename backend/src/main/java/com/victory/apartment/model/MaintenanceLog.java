@@ -1,7 +1,7 @@
 package com.victory.apartment.model;
 
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "maintenance_logs")
@@ -15,6 +15,8 @@ public class MaintenanceLog {
     private String date;
     private String taskNo;
     private String category;
+    private String taskTypeId;
+    private LocalDate completedDate;
     @Column(length = 1000)
     private String description;
     @Column(columnDefinition = "text")
@@ -38,6 +40,10 @@ public class MaintenanceLog {
     public void setTaskNo(String taskNo) { this.taskNo = taskNo; }
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
+    public String getTaskTypeId() { return taskTypeId; }
+    public void setTaskTypeId(String taskTypeId) { this.taskTypeId = taskTypeId; }
+    public LocalDate getCompletedDate() { return completedDate; }
+    public void setCompletedDate(LocalDate completedDate) { this.completedDate = completedDate; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
     public String getSuppliesSummary() { return suppliesSummary; }

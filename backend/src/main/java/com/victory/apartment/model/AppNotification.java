@@ -1,6 +1,7 @@
 package com.victory.apartment.model;
 
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -21,6 +22,9 @@ public class AppNotification {
     private String type; // info, success, warning, error
     private Boolean isRead;
     private LocalDateTime createdAt;
+    @JsonIgnore
+    @Column(name = "dedupe_key")
+    private String dedupeKey;
 
     public AppNotification() {}
 
@@ -38,5 +42,7 @@ public class AppNotification {
     public void setIsRead(Boolean isRead) { this.isRead = isRead; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public String getDedupeKey() { return dedupeKey; }
+    public void setDedupeKey(String dedupeKey) { this.dedupeKey = dedupeKey; }
 }
 
