@@ -94,6 +94,7 @@ public class MaintenanceController {
         }
 
         MaintenanceTask saved = taskRepo.save(task);
+        recalculateAndDeductSuppliesStock();
 
         // Always sync/add to maintenance log so per-unit history is always up to date!
         syncOrAddMaintenanceLogFromTask(saved, newlyCompleted, true);
@@ -143,6 +144,8 @@ public class MaintenanceController {
 
             activityLogService.log("Maintenance Task Updated",
                 String.format("Task %s for Unit %s set to %s", existing.getTaskNo(), existing.getRoomNumber(), existing.getStatus()));
+            MaintenanceTask saved = taskRepo.save(existing);
+            recalculateAndDeductSuppliesStock();
             return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
     }
@@ -155,6 +158,7 @@ public class MaintenanceController {
                 logRepo.deleteAll(linkedLogs);
             }
             taskRepo.deleteById(id);
+            recalculateAndDeductSuppliesStock();
             activityLogService.log("Maintenance Task Deleted", "Task " + id + " was removed");
             return ResponseEntity.noContent().<Void>build();
         }).orElse(ResponseEntity.notFound().build());
@@ -211,6 +215,8 @@ public class MaintenanceController {
         if (supply.getBaseStockQuantity() == null && supply.getStockQuantity() != null) {
             supply.setBaseStockQuantity(supply.getStockQuantity());
         }
+        if (supply.getLowStockThreshold() == null) supply.setLowStockThreshold(2);
+        if (supply.getLowStockAlertActive() == null) supply.setLowStockAlertActive(false);
         SupplyItem saved = supplyRepo.save(supply);
         recalculateAndDeductSuppliesStock();
         return supplyRepo.findById(saved.getId()).orElse(saved);
@@ -223,6 +229,7 @@ public class MaintenanceController {
             if (incoming.getCategory() != null) existing.setCategory(incoming.getCategory());
             if (incoming.getUnitCost() != null) existing.setUnitCost(incoming.getUnitCost());
             if (incoming.getUnitName() != null) existing.setUnitName(incoming.getUnitName());
+            if (incoming.getLowStockThreshold() != null) existing.setLowStockThreshold(Math.max(0, incoming.getLowStockThreshold()));
 
             // If manual adjustment of stockQuantity (like +1 or -1 buttons)
             if (incoming.getStockQuantity() != null) {
@@ -279,9 +286,9 @@ public class MaintenanceController {
 
     private boolean supplyNameMatches(String supplyName, String usedName) {
         if (supplyName == null || usedName == null) return false;
-        String s1 = supplyName.toLowerCase().replaceAll("[^a-z0-9]", "");
-        String s2 = usedName.toLowerCase().replaceAll("[^a-z0-9]", "");
-        return s1.contains(s2) || s2.contains(s1) ||
+        String s1 = supplyName.toLowerCase().replaceAll("[^\\p{L}\\p{N}]", "");
+        String s2 = usedName.toLowerCase().replaceAll("[^\\p{L}\\p{N}]", "");
+        return !s1.isEmpty() && s1.equals(s2) ||
                (s1.contains("ledbulb") && s2.contains("ledbulb")) ||
                (s1.contains("airconfilter") && s2.contains("airconfilter")) ||
                (s1.contains("basinsink") && s2.contains("basinsink")) ||
@@ -296,6 +303,7 @@ public class MaintenanceController {
         int total = 0;
 
         for (MaintenanceTask t : allTasks) {
+            if (!"Completed".equalsIgnoreCase(t.getStatus())) continue;
             Map<String, Integer> parsed = parseSuppliesUsed(t.getSuppliesUsed());
             for (Map.Entry<String, Integer> entry : parsed.entrySet()) {
                 if (supplyNameMatches(supplyName, entry.getKey())) {
@@ -325,6 +333,7 @@ public class MaintenanceController {
         Map<String, Integer> totalUsedMap = new HashMap<>();
 
         for (MaintenanceTask t : allTasks) {
+            if (!"Completed".equalsIgnoreCase(t.getStatus())) continue;
             Map<String, Integer> parsed = parseSuppliesUsed(t.getSuppliesUsed());
             parsed.forEach((k, v) -> totalUsedMap.put(k, totalUsedMap.getOrDefault(k, 0) + v));
         }
@@ -350,6 +359,21 @@ public class MaintenanceController {
             }
             int remainingStock = Math.max(0, base - totalUsed);
             item.setStockQuantity(remainingStock);
+            int threshold = item.getLowStockThreshold() != null ? item.getLowStockThreshold() : 2;
+            boolean isLow = remainingStock <= threshold;
+            if (isLow && !Boolean.TRUE.equals(item.getLowStockAlertActive())) {
+                AppNotification notif = new AppNotification();
+                notif.setId("notif-" + UUID.randomUUID().toString().substring(0, 8));
+                notif.setTitle("ใกล้หมด / Low inventory: " + item.getName());
+                notif.setMessage(String.format("%s เหลือ %d %s (แจ้งเตือนเมื่อเหลือไม่เกิน %d) / %d %s remaining (threshold %d).", item.getName(), remainingStock,
+                    item.getUnitName() != null ? item.getUnitName() : "ชิ้น", threshold, remainingStock,
+                    item.getUnitName() != null ? item.getUnitName() : "units", threshold));
+                notif.setType("inventory");
+                notif.setIsRead(false);
+                notif.setCreatedAt(LocalDateTime.now());
+                notifRepo.save(notif);
+            }
+            item.setLowStockAlertActive(isLow);
             supplyRepo.save(item);
         }
     }

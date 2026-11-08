@@ -19,6 +19,7 @@ public class DataSeeder {
     private final TenantRepository tenantRepo;
     private final LeaseRepository leaseRepo;
     private final UtilityBillRepository billRepo;
+    private final BillPaymentRepository billPaymentRepo;
     private final MaintenanceTaskRepository taskRepo;
     private final SupplyItemRepository supplyRepo;
     private final MaintenanceLogRepository logRepo;
@@ -29,7 +30,7 @@ public class DataSeeder {
     public DataSeeder(
             BuildingRepository buildingRepo,
             RoomRepository roomRepo, TenantRepository tenantRepo,
-            LeaseRepository leaseRepo, UtilityBillRepository billRepo,
+            LeaseRepository leaseRepo, UtilityBillRepository billRepo, BillPaymentRepository billPaymentRepo,
             MaintenanceTaskRepository taskRepo, SupplyItemRepository supplyRepo,
             MaintenanceLogRepository logRepo, ScheduledReminderRepository reminderRepo,
             AppNotificationRepository notifRepo, ActivityLogRepository activityRepo) {
@@ -38,6 +39,7 @@ public class DataSeeder {
         this.tenantRepo = tenantRepo;
         this.leaseRepo = leaseRepo;
         this.billRepo = billRepo;
+        this.billPaymentRepo = billPaymentRepo;
         this.taskRepo = taskRepo;
         this.supplyRepo = supplyRepo;
         this.logRepo = logRepo;
@@ -332,9 +334,10 @@ public class DataSeeder {
         b1.setBillingMonth("August 2026"); b1.setRentAmount(5500.0);
         b1.setPrevWaterMeter(125.0); b1.setCurrWaterMeter(133.0); b1.setWaterRate(9.0); b1.setWaterAmount(8.0 * 9.0); // 72.0
         b1.setPrevElectricMeter(470.0); b1.setCurrElectricMeter(550.0); b1.setElectricRate(4.0); b1.setElectricAmount(80.0 * 4.0); // 320.0
-        b1.setCommonFee(300.0); b1.setTotalAmount(5500.0 + 72.0 + 320.0 + 300.0); b1.setStatus("Paid"); b1.setPaymentDate("2026-08-05");
+        b1.setCommonFee(300.0); b1.setTotalAmount(5500.0 + 72.0 + 320.0 + 300.0); b1.setPaidAmount(6192.0); b1.setStatus("Paid"); b1.setPaymentDate("2026-08-05");
         b1.setCreatedAt(LocalDateTime.of(2026, 8, 1, 8, 0));
         billRepo.save(b1);
+        seedPayment(b1, "2026-08-05");
 
         UtilityBill b2 = new UtilityBill();
         b2.setId("bill-102"); b2.setInvoiceNo("INV-202608-102"); b2.setLeaseId("ls-102");
@@ -342,7 +345,7 @@ public class DataSeeder {
         b2.setBillingMonth("August 2026"); b2.setRentAmount(5500.0);
         b2.setPrevWaterMeter(130.0); b2.setCurrWaterMeter(138.0); b2.setWaterRate(9.0); b2.setWaterAmount(8.0 * 9.0); // 72.0
         b2.setPrevElectricMeter(490.0); b2.setCurrElectricMeter(580.0); b2.setElectricRate(4.0); b2.setElectricAmount(90.0 * 4.0); // 360.0
-        b2.setCommonFee(300.0); b2.setTotalAmount(5500.0 + 72.0 + 360.0 + 300.0); b2.setStatus("Pending");
+        b2.setCommonFee(300.0); b2.setTotalAmount(5500.0 + 72.0 + 360.0 + 300.0); b2.setPaidAmount(0.0); b2.setStatus("Unpaid");
         b2.setCreatedAt(LocalDateTime.of(2026, 8, 1, 8, 0));
         billRepo.save(b2);
 
@@ -352,9 +355,10 @@ public class DataSeeder {
         b3.setBillingMonth("August 2026"); b3.setRentAmount(6200.0);
         b3.setPrevWaterMeter(140.0); b3.setCurrWaterMeter(152.0); b3.setWaterRate(9.0); b3.setWaterAmount(12.0 * 9.0); // 108.0
         b3.setPrevElectricMeter(510.0); b3.setCurrElectricMeter(620.0); b3.setElectricRate(4.0); b3.setElectricAmount(110.0 * 4.0); // 440.0
-        b3.setCommonFee(300.0); b3.setTotalAmount(6200.0 + 108.0 + 440.0 + 300.0); b3.setStatus("Paid"); b3.setPaymentDate("2026-08-04");
+        b3.setCommonFee(300.0); b3.setTotalAmount(6200.0 + 108.0 + 440.0 + 300.0); b3.setPaidAmount(7048.0); b3.setStatus("Paid"); b3.setPaymentDate("2026-08-04");
         b3.setCreatedAt(LocalDateTime.of(2026, 8, 1, 8, 0));
         billRepo.save(b3);
+        seedPayment(b3, "2026-08-04");
 
         UtilityBill b4 = new UtilityBill();
         b4.setId("bill-b204"); b4.setInvoiceNo("INV-202608-B204"); b4.setLeaseId("ls-b204");
@@ -362,9 +366,10 @@ public class DataSeeder {
         b4.setBillingMonth("August 2026"); b4.setRentAmount(6500.0);
         b4.setPrevWaterMeter(110.0); b4.setCurrWaterMeter(118.0); b4.setWaterRate(9.0); b4.setWaterAmount(8.0 * 9.0); // 72.0
         b4.setPrevElectricMeter(320.0); b4.setCurrElectricMeter(410.0); b4.setElectricRate(4.0); b4.setElectricAmount(90.0 * 4.0); // 360.0
-        b4.setCommonFee(300.0); b4.setTotalAmount(6500.0 + 72.0 + 360.0 + 300.0); b4.setStatus("Paid"); b4.setPaymentDate("2026-08-03");
+        b4.setCommonFee(300.0); b4.setTotalAmount(6500.0 + 72.0 + 360.0 + 300.0); b4.setPaidAmount(7232.0); b4.setStatus("Paid"); b4.setPaymentDate("2026-08-03");
         b4.setCreatedAt(LocalDateTime.of(2026, 8, 1, 8, 0));
         billRepo.save(b4);
+        seedPayment(b4, "2026-08-03");
 
         UtilityBill b5 = new UtilityBill();
         b5.setId("bill-a204"); b5.setInvoiceNo("INV-202608-A204"); b5.setLeaseId("ls-204");
@@ -372,9 +377,20 @@ public class DataSeeder {
         b5.setBillingMonth("August 2026"); b5.setRentAmount(6500.0);
         b5.setPrevWaterMeter(105.0); b5.setCurrWaterMeter(114.0); b5.setWaterRate(9.0); b5.setWaterAmount(9.0 * 9.0); // 81.0
         b5.setPrevElectricMeter(310.0); b5.setCurrElectricMeter(395.0); b5.setElectricRate(4.0); b5.setElectricAmount(85.0 * 4.0); // 340.0
-        b5.setCommonFee(300.0); b5.setTotalAmount(6500.0 + 81.0 + 340.0 + 300.0); b5.setStatus("Paid"); b5.setPaymentDate("2026-08-04");
+        b5.setCommonFee(300.0); b5.setTotalAmount(6500.0 + 81.0 + 340.0 + 300.0); b5.setPaidAmount(7221.0); b5.setStatus("Paid"); b5.setPaymentDate("2026-08-04");
         b5.setCreatedAt(LocalDateTime.of(2026, 8, 1, 8, 0));
         billRepo.save(b5);
+        seedPayment(b5, "2026-08-04");
+    }
+
+    private void seedPayment(UtilityBill bill, String date) {
+        BillPayment payment = new BillPayment();
+        payment.setId("pay-" + bill.getId());
+        payment.setBillId(bill.getId());
+        payment.setAmount(bill.getPaidAmount());
+        payment.setPaymentDate(java.time.LocalDate.parse(date).atStartOfDay());
+        payment.setNote("Demo payment");
+        billPaymentRepo.save(payment);
     }
 
     private void seedSupplies() {
@@ -392,6 +408,7 @@ public class DataSeeder {
             int initialStock = Integer.parseInt(d[3]);
             s.setStockQuantity(initialStock);
             s.setBaseStockQuantity(initialStock);
+            s.setLowStockThreshold(2);
             s.setUnitCost(Double.parseDouble(d[4])); s.setUnitName(d[5]);
             supplyRepo.save(s);
         }

@@ -73,7 +73,7 @@ export const AdminDashboard: React.FC = () => {
     .filter(l => l.status === 'Active')
     .reduce((sum, l) => sum + (l.rentAmount || 0), 0);
 
-  const pendingBills = bills.filter(b => b.status === 'Pending');
+  const pendingBills = bills.filter(b => b.status !== 'Paid');
   const activeTasks = tasks.filter(t => t.status !== 'Completed');
 
   return (
