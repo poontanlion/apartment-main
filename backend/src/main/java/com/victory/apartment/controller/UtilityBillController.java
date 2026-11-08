@@ -3,6 +3,7 @@ package com.victory.apartment.controller;
 import com.victory.apartment.model.*;
 import com.victory.apartment.repository.*;
 import com.victory.apartment.service.ActivityLogService;
+import com.victory.apartment.service.BillAmounts;
 import com.victory.apartment.service.PriceRuleException;
 import com.victory.apartment.service.RentQuoteService;
 import com.victory.apartment.service.RentQuoteService.RentQuote;
@@ -126,14 +127,13 @@ public class UtilityBillController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    private double rentInsideTotal(UtilityBill bill) {
+        return BillAmounts.rentInsideTotal(bill.getTotalAmount(), bill.getWaterAmount(), bill.getElectricAmount(), bill.getCommonFee());
+    }
+
     @GetMapping("/rent-quote")
     public RentQuote rentQuote(@RequestParam String roomId, @RequestParam String month) {
         return rentQuotes.quote(roomId, RentQuoteService.parseBillingMonth(month));
-    }
-
-    private double rentInsideTotal(UtilityBill bill) {
-        double total = nz(bill.getTotalAmount());
-        return Math.max(0, total - nz(bill.getWaterAmount()) - nz(bill.getElectricAmount()) - (bill.getCommonFee() != null ? bill.getCommonFee() : 300));
     }
 
     private void calculateAmounts(UtilityBill bill) {

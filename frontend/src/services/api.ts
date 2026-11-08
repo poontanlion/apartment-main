@@ -1,7 +1,7 @@
 import {
   Room, Tenant, Lease, UtilityBill, BillStatus, BillPayment, MaintenanceTask, SupplyItem,
   MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication,
-  RoomPrice, RoomPriceHistory, RentQuote
+  RoomPrice, RoomPriceHistory, RentQuote, SummaryReport, SummaryReportFilters
 } from '../types';
 import { BookingLeaseError } from '../utils/bookingLeaseErrors';
 import { BookingRequestError } from '../utils/bookingErrors';
@@ -235,6 +235,18 @@ export const getBillPayments = (billId: string): Promise<BillPayment[]> =>
 
 export const addBillPayment = (billId: string, payload: { amount: number; note?: string; proofImage?: string }): Promise<{ bill: UtilityBill; payment: BillPayment }> =>
   fetchJson<{ bill: UtilityBill; payment: BillPayment }>(`${API_BASE}/utility-bills/${billId}/payments`, { method: 'POST', body: JSON.stringify(payload) });
+
+// ----------------------------------------------------
+// SUMMARY REPORTS API
+// ----------------------------------------------------
+/** Lets errors through: a failed report must not read as a report of zero. */
+export const getSummaryReport = (filters: SummaryReportFilters, signal?: AbortSignal): Promise<SummaryReport> => {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([name, value]) => {
+    if (value) params.set(name, value);
+  });
+  return fetchJson<SummaryReport>(`${API_BASE}/reports/summary?${params}`, { signal });
+};
 
 // ----------------------------------------------------
 // MAINTENANCE TASKS & SUPPLY USAGE API
