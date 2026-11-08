@@ -267,6 +267,7 @@ export interface MaintenancePredictionRow {
   daysRemaining: number | null;
   status: MaintenancePredictionStatus;
   hasAppointment: boolean;
+  appointmentDate: string | null;
 }
 
 export interface MaintenancePredictionSummary {

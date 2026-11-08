@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MaintenanceAppointmentModal } from './MaintenanceAppointmentModal';
 import { useSearchParams } from 'react-router-dom';
 import { AlertCircle, Calendar, ChevronLeft, ChevronRight, RefreshCw, Search } from 'lucide-react';
 import { toast } from 'sonner';
@@ -30,6 +31,8 @@ export const MaintenancePredictionsTab: React.FC<{ buildingId?: string }> = ({ b
   const [page, setPage] = useState(1);
   const [searchPending, setSearchPending] = useState(false);
   const publishedSearch = useRef(query);
+  const [appointmentRow, setAppointmentRow] = useState<MaintenancePredictionRow | null>(null);
+  const closeAppointment = useCallback(() => setAppointmentRow(null), []);
 
   const { data, options, loading, refreshing, error, refresh, retry } = useMaintenancePredictions(
     { buildingId, roomId, taskTypeId, status, q: query },
@@ -94,9 +97,12 @@ export const MaintenancePredictionsTab: React.FC<{ buildingId?: string }> = ({ b
     const presentation = predictionStatusPresentation(row.status);
     return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${presentation.color}`}>{t(presentation.key)}</span>;
   };
-  const appointmentButton = <button type="button" disabled className={buttonClass}>
-    <Calendar className="h-4 w-4" aria-hidden="true" />{t('mnt.predictions.setAppointment')}
-  </button>;
+  const appointmentButton = (row: MaintenancePredictionRow) => <div className="space-y-1">
+    <button type="button" onClick={() => setAppointmentRow(row)} className={buttonClass}>
+      <Calendar className="h-4 w-4" aria-hidden="true" />{t(row.hasAppointment ? 'mnt.predictions.appointmentSet' : 'mnt.predictions.setAppointment')}
+    </button>
+    {row.hasAppointment && <p className="text-xs tabular-nums text-nike-mute dark:text-nike-stone">{formatDateDMY(row.appointmentDate)}</p>}
+  </div>;
 
   return <section className="space-y-6 rounded-2xl border border-nike-hairline bg-nike-canvas p-4 shadow-xs sm:p-6 dark:border-nike-dark-card dark:bg-nike-dark-elevated" aria-label={t('mnt.predictions.title')}>
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
@@ -173,7 +179,7 @@ export const MaintenancePredictionsTab: React.FC<{ buildingId?: string }> = ({ b
         <tbody className="divide-y divide-nike-hairline dark:divide-nike-dark-card">{visibleRows.map(row => <tr key={`${row.roomId}/${row.taskTypeId}`}>
           <td className="px-3 py-5"><span className="inline-block rounded-lg bg-nike-soft-cloud px-2 py-1 font-bold text-nike-ink dark:bg-nike-dark-surface dark:text-white">{row.roomNumber}</span>
             <div className="mt-2 font-semibold text-nike-ink dark:text-white">{taskName(row)}</div><div className="mt-1 text-xs text-nike-mute dark:text-nike-stone">{row.buildingName || '—'}</div></td>
-          <td className="px-3 py-5">{dateContent(row)}</td><td className="px-3 py-5">{badge(row)}</td><td className="px-3 py-5">{appointmentButton}</td>
+          <td className="px-3 py-5">{dateContent(row)}</td><td className="px-3 py-5">{badge(row)}</td><td className="px-3 py-5">{appointmentButton(row)}</td>
         </tr>)}</tbody>
       </table></div>
       <div className="space-y-3 md:hidden">{visibleRows.map(row => <article key={`${row.roomId}/${row.taskTypeId}`} className="space-y-4 rounded-xl border border-nike-hairline p-4 dark:border-nike-dark-card">
@@ -181,7 +187,7 @@ export const MaintenancePredictionsTab: React.FC<{ buildingId?: string }> = ({ b
           <h3 className="mt-3 font-semibold text-nike-ink dark:text-white">{taskName(row)}</h3><p className="mt-1 text-xs text-nike-mute dark:text-nike-stone">{row.buildingName || '—'}</p></div>
         <div><p className="mb-1 text-xs text-nike-mute dark:text-nike-stone">{t('mnt.predictions.predictedDate')}</p>{dateContent(row)}</div>
         <div><p className="mb-1 text-xs text-nike-mute dark:text-nike-stone">{t('mnt.predictions.status')}</p>{badge(row)}</div>
-        <div><p className="mb-1 text-xs text-nike-mute dark:text-nike-stone">{t('mnt.predictions.actions')}</p>{appointmentButton}</div>
+        <div><p className="mb-1 text-xs text-nike-mute dark:text-nike-stone">{t('mnt.predictions.actions')}</p>{appointmentButton(row)}</div>
       </article>)}</div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-nike-hairline pt-4 text-xs text-nike-mute dark:border-nike-dark-card dark:text-nike-stone">
         <span>{predictionText(t('mnt.predictions.pageRange'), { start: start + 1, end: Math.min(start + PAGE_SIZE, rows.length), total: rows.length })}</span>
@@ -189,5 +195,7 @@ export const MaintenancePredictionsTab: React.FC<{ buildingId?: string }> = ({ b
           <button type="button" className={buttonClass} disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>{t('mnt.predictions.next')}<ChevronRight className="h-4 w-4" aria-hidden="true" /></button></div>
       </div>
     </>}
+    {appointmentRow && <MaintenanceAppointmentModal row={appointmentRow} onClose={closeAppointment}
+      onSaved={() => { closeAppointment(); retry(); }} />}
   </section>;
 };

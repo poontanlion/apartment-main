@@ -1,8 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getMaintenancePredictions, MaintenancePredictionApiError, refreshMaintenancePredictions } from './api';
+import { getMaintenancePredictions, MaintenancePredictionApiError, refreshMaintenancePredictions, setMaintenanceAppointment, cancelMaintenanceAppointment } from './api';
 
 afterEach(() => vi.unstubAllGlobals());
 describe('maintenance prediction API contract', () => {
+  it('sends appointment PUT and DELETE with same-origin cookies and only date in the body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ hasAppointment: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    await setMaintenanceAppointment('rm-A101', 'mtt-light', '2026-11-20');
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/maintenance/predictions/rm-A101/mtt-light/appointment',
+      expect.objectContaining({ method: 'PUT', credentials: 'same-origin', body: '{"date":"2026-11-20"}' }));
+    await cancelMaintenanceAppointment('rm-A101', 'mtt-light');
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/maintenance/predictions/rm-A101/mtt-light/appointment',
+      expect.objectContaining({ method: 'DELETE', credentials: 'same-origin' }));
+  });
   it('encodes filters, forwards abort signal, and explicitly sends session cookies', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ predictions: [], summary: { total: 0 } }) });
     vi.stubGlobal('fetch', fetchMock);

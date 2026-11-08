@@ -1,7 +1,7 @@
 import {
   Room, Tenant, Lease, UtilityBill, BillStatus, MaintenanceTask, SupplyItem,
   MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication,
-  RoomPrice, RoomPriceHistory, RentQuote, MaintenancePredictionFilters, MaintenancePredictionResponse
+  RoomPrice, RoomPriceHistory, RentQuote, MaintenancePredictionFilters, MaintenancePredictionResponse, MaintenancePredictionRow
 } from '../types';
 import { BookingLeaseError } from '../utils/bookingLeaseErrors';
 import { BookingRequestError } from '../utils/bookingErrors';
@@ -33,6 +33,14 @@ export const getMaintenancePredictions = (
 
 export const refreshMaintenancePredictions = (signal?: AbortSignal): Promise<{ success: number; failure: number }> =>
   fetchPredictionJson(`${API_BASE}/maintenance/predictions/refresh`, { method: 'POST', signal });
+
+export const setMaintenanceAppointment = (roomId: string, taskTypeId: string, date: string): Promise<MaintenancePredictionRow> =>
+  fetchPredictionJson(`${API_BASE}/maintenance/predictions/${encodeURIComponent(roomId)}/${encodeURIComponent(taskTypeId)}/appointment`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date }),
+  });
+
+export const cancelMaintenanceAppointment = (roomId: string, taskTypeId: string): Promise<MaintenancePredictionRow> =>
+  fetchPredictionJson(`${API_BASE}/maintenance/predictions/${encodeURIComponent(roomId)}/${encodeURIComponent(taskTypeId)}/appointment`, { method: 'DELETE' });
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {

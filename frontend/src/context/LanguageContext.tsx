@@ -10,6 +10,19 @@ interface LanguageContextType {
 }
 
 const translations: Record<string, Record<Language, string>> = {
+  'mnt.predictions.appointmentSet': { th: 'ตั้งนัดแล้ว', en: 'Appointment set' },
+  'mnt.predictions.editAppointment': { th: 'แก้ไขวันนัด', en: 'Edit appointment' },
+  'mnt.predictions.appointmentDate': { th: 'วันนัด', en: 'Appointment date' },
+  'mnt.predictions.confirmAppointment': { th: 'ยืนยัน', en: 'Confirm appointment' },
+  'mnt.predictions.closeModal': { th: 'ยกเลิก', en: 'Cancel' },
+  'mnt.predictions.cancelAppointment': { th: 'ยกเลิกนัด', en: 'Cancel appointment' },
+  'mnt.predictions.confirmCancelAppointment': { th: 'ยืนยันยกเลิกนัดนี้หรือไม่?', en: 'Are you sure you want to cancel this appointment?' },
+  'mnt.predictions.confirmAppointmentCancellation': { th: 'ยืนยันยกเลิกนัด', en: 'Confirm cancellation' },
+  'mnt.predictions.savingAppointment': { th: 'กำลังบันทึก', en: 'Saving' },
+  'mnt.predictions.appointmentSaved': { th: 'บันทึกวันนัดเรียบร้อยแล้ว', en: 'Appointment saved' },
+  'mnt.predictions.appointmentCancelled': { th: 'ยกเลิกนัดเรียบร้อยแล้ว', en: 'Appointment cancelled' },
+  'mnt.predictions.appointmentValidation': { th: 'กรุณาเลือกวันที่ที่ถูกต้องและไม่ก่อนวันนี้ตามเวลาไทย', en: 'Choose a valid date that is today or later in Bangkok.' },
+  'mnt.predictions.appointmentError': { th: 'บันทึกนัดไม่สำเร็จ กรุณาลองใหม่', en: 'Unable to update the appointment. Please try again.' },
   'mnt.predictions.title': { th: 'คาดการณ์การบำรุงรักษา', en: 'Maintenance predictions' },
   'mnt.predictions.description': { th: 'ดูวันครบกำหนดและวางแผนดูแลห้องพัก', en: 'Review upcoming due dates and plan room maintenance.' },
   'mnt.predictions.refresh': { th: 'อัปเดตข้อมูล', en: 'Refresh predictions' },
