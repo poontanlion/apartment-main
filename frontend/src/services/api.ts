@@ -1,8 +1,6 @@
 import {
   Room, Tenant, Lease, UtilityBill, BillStatus, BillPayment, MaintenanceTask, SupplyItem,
   MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication,
-  RoomPrice, RoomPriceHistory, RentQuote, MaintenancePredictionFilters, MaintenancePredictionResponse, MaintenancePredictionRow,
-  SummaryReport, SummaryReportFilters
 
   RoomPrice, RoomPriceHistory, RentQuote, MaintenancePredictionFilters, MaintenancePredictionResponse, MaintenancePredictionRow, 
   SummaryReport, SummaryReportFilters
