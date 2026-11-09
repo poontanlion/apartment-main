@@ -46,6 +46,8 @@ export interface Room {
   buildingName?: string;
   currentTenantId?: string;
   currentTenantName?: string;
+  extraChargeLabel?: string;
+  extraChargeAmount?: number;
   prevWaterMeter?: number;
   currWaterMeter?: number;
   prevElectricMeter?: number;
