@@ -211,6 +211,54 @@ public class MaintenanceControllerTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void createSupply_rejectsNegativeLowStockThreshold() throws Exception {
+        mockSupply.setLowStockThreshold(-1);
+
+        mockMvc.perform(post("/api/supplies")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(mockSupply)))
+                .andExpect(status().isBadRequest());
+
+        Mockito.verify(supplyRepo, Mockito.never()).save(any(SupplyItem.class));
+    }
+
+    @Test
+    void updateSupply_rejectsNegativeStockQuantity() throws Exception {
+        mockSupply.setStockQuantity(-1);
+
+        mockMvc.perform(put("/api/supplies/sup-123")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(mockSupply)))
+                .andExpect(status().isBadRequest());
+
+        Mockito.verify(supplyRepo, Mockito.never()).save(any(SupplyItem.class));
+    }
+
+    @Test
+    void createSupply_resetsClientAlertStateAndCreatesLowStockNotification() throws Exception {
+        mockSupply.setStockQuantity(1);
+        mockSupply.setLowStockThreshold(2);
+        mockSupply.setLowStockAlertActive(true);
+        java.util.List<SupplyItem> inventory = new java.util.ArrayList<>();
+        Mockito.when(supplyRepo.save(any(SupplyItem.class))).thenAnswer(call -> {
+            SupplyItem saved = call.getArgument(0);
+            if (inventory.isEmpty()) inventory.add(saved);
+            return saved;
+        });
+        Mockito.when(supplyRepo.findAll()).thenAnswer(call -> java.util.List.copyOf(inventory));
+
+        mockMvc.perform(post("/api/supplies")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(mockSupply)))
+                .andExpect(status().isOk());
+
+        Mockito.verify(notifRepo).save(Mockito.argThat(notification ->
+                "inventory".equals(notification.getType())
+                        && notification.getTitle().contains("Low inventory")));
+        org.assertj.core.api.Assertions.assertThat(mockSupply.getLowStockAlertActive()).isTrue();
+    }
+
     /**
      * SUCCESS Case: Get all logs.
      * Expect HTTP 200 OK.

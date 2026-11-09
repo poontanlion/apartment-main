@@ -52,7 +52,11 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(error.message || error.error || res.statusText);
+    const rowErrors = Array.isArray(error.errors)
+      ? error.errors.map((item: { line?: number; message?: string }) =>
+        `${item.line ? `Line ${item.line}: ` : ''}${item.message || ''}`.trim())
+      : [];
+    throw new Error([error.message || error.error || res.statusText, ...rowErrors].filter(Boolean).join('\n'));
   }
   return res.json();
 }
@@ -247,6 +251,12 @@ export const saveUtilityBill = async (billData: Partial<UtilityBill>): Promise<U
     body: JSON.stringify(billData),
   });
 };
+
+export const importUtilityBills = (rows: Array<{ line: number; bill: Partial<UtilityBill> }>): Promise<{ imported: number }> =>
+  fetchJson<{ imported: number }>(`${API_BASE}/utility-bills/import`, {
+    method: 'POST',
+    body: JSON.stringify(rows),
+  });
 
 export const getBillingSettings = (): Promise<BillingSettings> =>
   fetchJson<BillingSettings>(`${API_BASE}/billing-settings`);

@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Download, FileSpreadsheet, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Room, UtilityBill } from '../../types';
-import { getLeases, getRentQuote, saveUtilityBill } from '../../services/api';
+import { getLeases, getRentQuote, importUtilityBills } from '../../services/api';
 import { useLanguage } from '../../context/LanguageContext';
 import { currentBillingMonth } from '../../utils/billingMonth';
 import { CsvPlan, PlannedRow, buildImportPlan, invoiceNoFor } from '../../utils/utilityCsv';
@@ -36,12 +36,6 @@ const describeError = (error: NonNullable<PlannedRow['error']>, isThai: boolean)
   }
 };
 
-interface ImportResult {
-  row: PlannedRow;
-  ok: boolean;
-  message?: string;
-}
-
 interface Props {
   rooms: Room[];
   bills: UtilityBill[];
@@ -57,12 +51,12 @@ export const UtilityCsvImport: React.FC<Props> = ({ rooms, bills, onClose, onImp
   const [fileName, setFileName] = useState('');
   const [plan, setPlan] = useState<CsvPlan | null>(null);
   const [importing, setImporting] = useState(false);
-  const [progress, setProgress] = useState({ done: 0, total: 0 });
-  const [results, setResults] = useState<ImportResult[] | null>(null);
+  const [importCount, setImportCount] = useState(0);
+  const [results, setResults] = useState<PlannedRow[] | null>(null);
+  const [importError, setImportError] = useState('');
 
   const validRows = plan ? plan.rows.filter(row => !row.error) : [];
   const invalidCount = plan ? plan.rows.length - validRows.length : 0;
-  const failed = results ? results.filter(r => !r.ok) : [];
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -70,6 +64,7 @@ export const UtilityCsvImport: React.FC<Props> = ({ rooms, bills, onClose, onImp
     if (!file) return;
     setFileName(file.name);
     setResults(null);
+    setImportError('');
     setPlan(buildImportPlan(await file.text(), rooms, bills));
   };
 
@@ -91,51 +86,54 @@ export const UtilityCsvImport: React.FC<Props> = ({ rooms, bills, onClose, onImp
   };
 
   const runImport = async () => {
-    if (validRows.length === 0) return;
+    if (validRows.length === 0 || invalidCount > 0) return;
     setImporting(true);
     setResults(null);
-    setProgress({ done: 0, total: validRows.length });
-
-    const leases = await getLeases();
-    const out: ImportResult[] = [];
-
-    // One at a time: each bill also moves the room's meter readings on the server.
-    for (const row of validRows) {
-      try {
-        // The server decides the rent, as it does for the New Bill form. Ask it first so the tenant is the lease's.
+    setImportError('');
+    setImportCount(validRows.length);
+    let importedCount = 0;
+    let imported = false;
+    try {
+      const leases = await getLeases();
+      // Resolve tenant labels up front; bill writes are then sent as one server transaction.
+      const payload = await Promise.all(validRows.map(async row => {
         const quote = await getRentQuote(row.roomId!, row.billingMonth);
         const lease = leases.find(l => l.id === quote.leaseId);
         const room = rooms.find(r => r.id === row.roomId);
-        await saveUtilityBill({
-          roomId: row.roomId,
-          roomNumber: row.roomNumber,
-          tenantName: lease?.tenantName || room?.currentTenantName || 'Tenant',
-          billingMonth: row.billingMonth,
-          invoiceNo: invoiceNoFor(row.billingMonth, row.roomNumber),
-          prevWaterMeter: row.prevWater,
-          currWaterMeter: row.currWater,
-          prevElectricMeter: row.prevElectric,
-          currElectricMeter: row.currElectric,
-          waterRate: WATER_RATE,
-          electricRate: ELECTRIC_RATE,
-          commonFee: COMMON_FEE,
-        });
-        out.push({ row, ok: true });
-      } catch (err) {
-        out.push({ row, ok: false, message: (err as Error).message });
-      }
-      setProgress(p => ({ ...p, done: p.done + 1 }));
+        return {
+          line: row.line,
+          bill: {
+            roomId: row.roomId,
+            roomNumber: row.roomNumber,
+            tenantName: lease?.tenantName || room?.currentTenantName || 'Tenant',
+            billingMonth: row.billingMonth,
+            invoiceNo: invoiceNoFor(row.billingMonth, row.roomNumber),
+            prevWaterMeter: row.prevWater,
+            currWaterMeter: row.currWater,
+            prevElectricMeter: row.prevElectric,
+            currElectricMeter: row.currElectric,
+            waterRate: WATER_RATE,
+            electricRate: ELECTRIC_RATE,
+            commonFee: COMMON_FEE,
+          },
+        };
+      }));
+      const response = await importUtilityBills(payload);
+      importedCount = response.imported;
+      imported = true;
+    } catch (err) {
+      setImportError((err as Error).message || (isThai ? 'นำเข้าทั้งชุดไม่สำเร็จ ไม่มีบิลถูกบันทึก' : 'The batch was rejected. No bills were saved.'));
+    } finally {
+      setImporting(false);
     }
-
-    setResults(out);
-    setImporting(false);
-    const okCount = out.filter(r => r.ok).length;
-    if (okCount > 0) {
-      toast.success(isThai ? `นำเข้าบิลสำเร็จ ${okCount} รายการ` : `Imported ${okCount} bills`);
+    if (!imported) return;
+    setImportCount(importedCount);
+    setResults(validRows);
+    toast.success(isThai ? `นำเข้าบิลสำเร็จทั้งชุด ${importedCount} รายการ` : `Imported all ${importedCount} bills`);
+    try {
       await onImported();
-    }
-    if (okCount < out.length) {
-      toast.error(isThai ? `นำเข้าไม่สำเร็จ ${out.length - okCount} รายการ` : `${out.length - okCount} bills failed`);
+    } catch {
+      toast.error(isThai ? 'บันทึกแล้ว แต่โหลดรายการบิลใหม่ไม่สำเร็จ' : 'Batch saved, but the bill list could not be refreshed.');
     }
   };
 
@@ -198,8 +196,8 @@ export const UtilityCsvImport: React.FC<Props> = ({ rooms, bills, onClose, onImp
           <div className="space-y-3">
             <p className="text-xs text-nike-ink dark:text-white">
               {isThai
-                ? `พร้อมนำเข้า ${validRows.length} แถว · มีปัญหา ${invalidCount} แถว (แถวที่มีปัญหาจะถูกข้าม)`
-                : `${validRows.length} rows ready · ${invalidCount} with problems (those are skipped)`}
+                ? `พร้อมนำเข้า ${validRows.length} แถว · มีปัญหา ${invalidCount} แถว (ต้องแก้ทุกแถวก่อนบันทึกทั้งชุด)`
+                : `${validRows.length} rows ready · ${invalidCount} with problems (fix all rows before saving the batch)`}
             </p>
 
             <div className="overflow-x-auto max-h-72 overflow-y-auto border border-nike-hairline dark:border-nike-dark-card rounded-xl">
@@ -238,13 +236,13 @@ export const UtilityCsvImport: React.FC<Props> = ({ rooms, bills, onClose, onImp
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-nike-mute">
                 {importing
-                  ? (isThai ? `กำลังนำเข้า ${progress.done}/${progress.total}…` : `Importing ${progress.done}/${progress.total}…`)
+                  ? (isThai ? `กำลังตรวจสอบและบันทึก ${importCount} แถวเป็นชุด…` : `Validating and saving ${importCount} rows as one batch…`)
                   : (isThai ? `อัตราที่ใช้: น้ำ ${WATER_RATE} / ไฟ ${ELECTRIC_RATE} บาทต่อหน่วย ค่าส่วนกลาง ${COMMON_FEE} บาท` : `Rates: water ${WATER_RATE} / electric ${ELECTRIC_RATE} THB per unit, common fee ${COMMON_FEE} THB`)}
               </p>
               <button
                 type="button"
                 onClick={runImport}
-                disabled={importing || validRows.length === 0 || results !== null}
+                disabled={importing || validRows.length === 0 || invalidCount > 0 || results !== null}
                 className="px-4 py-2 text-xs font-semibold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all disabled:opacity-50"
               >
                 {isThai ? `นำเข้า ${validRows.length} แถว` : `Import ${validRows.length} rows`}
@@ -253,29 +251,17 @@ export const UtilityCsvImport: React.FC<Props> = ({ rooms, bills, onClose, onImp
           </div>
         )}
 
+        {importError && (
+          <div role="alert" className="whitespace-pre-line rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+            {isThai ? 'นำเข้าทั้งชุดไม่สำเร็จ ไม่มีบิลถูกบันทึก:' : 'The batch was rejected. No bills were saved:'}<br />{importError}
+          </div>
+        )}
+
         {results && (
           <div className="space-y-2 border-t border-nike-hairline dark:border-nike-dark-card pt-4">
             <p className="text-sm font-semibold text-nike-ink dark:text-white">
-              {isThai
-                ? `เสร็จแล้ว: สำเร็จ ${results.length - failed.length} · ไม่สำเร็จ ${failed.length}`
-                : `Done: ${results.length - failed.length} saved · ${failed.length} failed`}
+              {isThai ? `บันทึกสำเร็จทั้งชุด ${results.length} รายการ` : `Batch saved successfully: ${results.length} bills`}
             </p>
-            {failed.length > 0 && (
-              <ul className="text-xs text-red-600 dark:text-red-400 space-y-1">
-                {failed.map(item => (
-                  <li key={item.row.line}>
-                    {isThai ? 'บรรทัด' : 'Line'} {item.row.line} · {item.row.roomNumber} {item.row.billingMonth}: {item.message}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {failed.length > 0 && (
-              <p className="text-xs text-nike-mute">
-                {isThai
-                  ? 'แก้เฉพาะแถวที่ไม่สำเร็จแล้วอัปโหลดใหม่ได้ แถวที่บันทึกแล้วจะถูกข้ามเพราะมีบิลของเดือนนั้นอยู่แล้ว'
-                  : 'Fix the failed rows and upload again. Rows already saved are skipped because the bill exists.'}
-              </p>
-            )}
             <div className="flex justify-end">
               <button
                 type="button"

@@ -6,6 +6,8 @@ import com.victory.apartment.service.ActivityLogService;
 import com.victory.apartment.service.maintenancepredictor.MaintenancePredictionTrigger;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -208,6 +210,7 @@ public class MaintenanceController {
 
     @PostMapping("/supplies")
     public SupplyItem createSupply(@RequestBody SupplyItem supply) {
+        validateSupplyStock(supply);
         if (supply.getId() == null || supply.getId().isEmpty()) {
             supply.setId("sup-" + UUID.randomUUID().toString().substring(0, 8));
         }
@@ -215,7 +218,8 @@ public class MaintenanceController {
             supply.setBaseStockQuantity(supply.getStockQuantity());
         }
         if (supply.getLowStockThreshold() == null) supply.setLowStockThreshold(2);
-        if (supply.getLowStockAlertActive() == null) supply.setLowStockAlertActive(false);
+        // Alert state is derived from stock and threshold; clients cannot suppress a first alert.
+        supply.setLowStockAlertActive(false);
         SupplyItem saved = supplyRepo.save(supply);
         recalculateAndDeductSuppliesStock();
         return supplyRepo.findById(saved.getId()).orElse(saved);
@@ -223,12 +227,13 @@ public class MaintenanceController {
 
     @PutMapping("/supplies/{id}")
     public ResponseEntity<SupplyItem> updateSupply(@PathVariable String id, @RequestBody SupplyItem incoming) {
+        validateSupplyStock(incoming);
         return supplyRepo.findById(id).map(existing -> {
             if (incoming.getName() != null) existing.setName(incoming.getName());
             if (incoming.getCategory() != null) existing.setCategory(incoming.getCategory());
             if (incoming.getUnitCost() != null) existing.setUnitCost(incoming.getUnitCost());
             if (incoming.getUnitName() != null) existing.setUnitName(incoming.getUnitName());
-            if (incoming.getLowStockThreshold() != null) existing.setLowStockThreshold(Math.max(0, incoming.getLowStockThreshold()));
+            if (incoming.getLowStockThreshold() != null) existing.setLowStockThreshold(incoming.getLowStockThreshold());
 
             // If manual adjustment of stockQuantity (like +1 or -1 buttons)
             if (incoming.getStockQuantity() != null) {
@@ -240,6 +245,18 @@ public class MaintenanceController {
             recalculateAndDeductSuppliesStock();
             return ResponseEntity.ok(supplyRepo.findById(id).orElse(existing));
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    private void validateSupplyStock(SupplyItem supply) {
+        if (supply.getLowStockThreshold() != null && supply.getLowStockThreshold() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Low-stock threshold must be zero or greater.");
+        }
+        if (supply.getStockQuantity() != null && supply.getStockQuantity() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stock quantity must be zero or greater.");
+        }
+        if (supply.getBaseStockQuantity() != null && supply.getBaseStockQuantity() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Base stock quantity must be zero or greater.");
+        }
     }
 
     // Dynamic helper methods for parsing and stock deduction

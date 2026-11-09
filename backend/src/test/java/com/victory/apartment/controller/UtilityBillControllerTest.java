@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -138,6 +139,59 @@ public class UtilityBillControllerTest {
                 .content(objectMapper.writeValueAsString(newBill)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("bill-123"));
+    }
+
+    @Test
+    void importBatch_rejectsWholeBatchWhenAnyRowIsInvalid() throws Exception {
+        UtilityBill valid = billWithUsage();
+        UtilityBill invalid = billWithUsage();
+        invalid.setRoomId("rm-missing");
+        Mockito.when(rentQuoteService.quote("rm-missing", DECEMBER))
+                .thenThrow(new PriceRuleException(HttpStatus.BAD_REQUEST, "ROOM_NOT_FOUND", "Room not found."));
+
+        String body = objectMapper.writeValueAsString(Arrays.asList(
+                Map.of("line", 2, "bill", valid),
+                Map.of("line", 3, "bill", invalid)));
+
+        mockMvc.perform(post("/api/utility-bills/import")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].line").value(3))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("no bills were saved")));
+
+        Mockito.verify(utilityBillRepository, Mockito.never()).save(any(UtilityBill.class));
+    }
+
+    @Test
+    void importBatch_savesAllPreparedRowsTogether() throws Exception {
+        saveReturnsArgument();
+        Mockito.when(roomRepository.findById("rm-123")).thenReturn(Optional.of(mockRoom));
+        UtilityBill bill = billWithUsage();
+        String body = objectMapper.writeValueAsString(List.of(Map.of("line", 2, "bill", bill)));
+
+        mockMvc.perform(post("/api/utility-bills/import")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imported").value(1));
+
+        Mockito.verify(utilityBillRepository).save(any(UtilityBill.class));
+    }
+
+    @Test
+    void importBatch_rejectsMeterReadingsThatMoveBackwards() throws Exception {
+        UtilityBill invalid = billWithUsage();
+        invalid.setCurrWaterMeter(99.0);
+        String body = objectMapper.writeValueAsString(List.of(Map.of("line", 2, "bill", invalid)));
+
+        mockMvc.perform(post("/api/utility-bills/import")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].code").value("METER_BACKWARDS"));
+
+        Mockito.verify(utilityBillRepository, Mockito.never()).save(any(UtilityBill.class));
     }
 
     private UtilityBill billWithUsage() {

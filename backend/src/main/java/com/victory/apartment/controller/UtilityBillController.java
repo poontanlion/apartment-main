@@ -22,6 +22,10 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/utility-bills")
 public class UtilityBillController {
+    public record UtilityBillImportRow(int line, UtilityBill bill) {}
+    public record UtilityBillImportError(int line, String code, String message) {}
+    public record UtilityBillImportResult(int imported) {}
+
     private final UtilityBillRepository repo;
     private final RoomRepository roomRepo;
     private final BillPaymentRepository paymentRepo;
@@ -51,7 +55,96 @@ public class UtilityBillController {
     }
 
     @PostMapping
+    @Transactional
     public UtilityBill create(@RequestBody UtilityBill bill) {
+        if (bill.getRoomId() != null) roomRepo.findByIdForUpdate(bill.getRoomId());
+        UtilityBill prepared = prepareBill(bill, null);
+        return persistBill(prepared);
+    }
+
+    /** Validates and stages the complete import before writing any bill or meter reading. */
+    @Transactional
+    @PostMapping("/import")
+    public ResponseEntity<?> importBatch(@RequestBody List<UtilityBillImportRow> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "The import has no bill rows."));
+        }
+
+        List<UtilityBillImportRow> ordered = new ArrayList<>(rows);
+        ordered.sort(Comparator
+                .comparing((UtilityBillImportRow row) -> row == null || row.bill() == null ? "" : Objects.toString(row.bill().getRoomId(), ""))
+                .thenComparing(row -> row == null || row.bill() == null ? YearMonth.of(1, 1) : safeMonth(row.bill().getBillingMonth()))
+                .thenComparingInt(row -> row == null ? 0 : row.line()));
+
+        Set<String> seenRoomMonths = new HashSet<>();
+        List<UtilityBillImportError> errors = new ArrayList<>();
+        List<UtilityBill> prepared = new ArrayList<>();
+        Map<String, UtilityBill> stagedLatestByRoom = new HashMap<>();
+
+        // Acquire room locks in a stable order so concurrent imports cannot race on the same rooms.
+        ordered.stream().filter(Objects::nonNull).map(UtilityBillImportRow::bill).filter(Objects::nonNull)
+                .map(UtilityBill::getRoomId).filter(Objects::nonNull).distinct().sorted()
+                .forEach(roomId -> roomRepo.findByIdForUpdate(roomId));
+
+        for (UtilityBillImportRow row : ordered) {
+            if (row == null || row.bill() == null) {
+                errors.add(new UtilityBillImportError(row == null ? 0 : row.line(), "INVALID_ROW", "Bill data is missing."));
+                continue;
+            }
+            UtilityBill bill = row.bill();
+            try {
+                YearMonth month = RentQuoteService.parseBillingMonth(bill.getBillingMonth());
+                if (bill.getRoomId() == null || bill.getRoomId().isBlank()) {
+                    throw new PriceRuleException(HttpStatus.BAD_REQUEST, "ROOM_REQUIRED", "Room is required.");
+                }
+                String roomMonth = bill.getRoomId() + "|" + month;
+                if (!seenRoomMonths.add(roomMonth)) {
+                    throw new PriceRuleException(HttpStatus.CONFLICT, "DUPLICATE_IN_FILE", "This room and month appear more than once in the import.");
+                }
+                validateImportMeters(bill);
+                UtilityBill ready = prepareBill(bill, stagedLatestByRoom.get(bill.getRoomId()));
+                prepared.add(ready);
+                UtilityBill staged = stagedLatestByRoom.get(bill.getRoomId());
+                if (staged == null || safeMonth(staged.getBillingMonth()).isBefore(month)) {
+                    stagedLatestByRoom.put(bill.getRoomId(), ready);
+                }
+            } catch (PriceRuleException exception) {
+                errors.add(new UtilityBillImportError(row.line(), exception.getCode(), exception.getMessage()));
+            } catch (RuntimeException exception) {
+                errors.add(new UtilityBillImportError(row.line(), "INVALID_ROW", exception.getMessage() == null ? "Invalid bill row." : exception.getMessage()));
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Import rejected. Fix the listed rows; no bills were saved.",
+                    "errors", errors));
+        }
+
+        prepared.forEach(bill -> persistBill(bill, false));
+        stagedLatestByRoom.keySet().stream().sorted().forEach(this::syncRoomMetersFromLatestBill);
+        return ResponseEntity.ok(new UtilityBillImportResult(prepared.size()));
+    }
+
+    private void validateImportMeters(UtilityBill bill) {
+        Double previousWater = bill.getPrevWaterMeter();
+        Double currentWater = bill.getCurrWaterMeter();
+        Double previousElectric = bill.getPrevElectricMeter();
+        Double currentElectric = bill.getCurrElectricMeter();
+        if (!validMeter(previousWater) || !validMeter(currentWater)
+                || !validMeter(previousElectric) || !validMeter(currentElectric)) {
+            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "INVALID_METER", "Meter readings must be finite numbers of zero or more.");
+        }
+        if (currentWater < previousWater || currentElectric < previousElectric) {
+            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "METER_BACKWARDS", "Current meter readings cannot be lower than previous readings.");
+        }
+    }
+
+    private boolean validMeter(Double value) {
+        return value != null && Double.isFinite(value) && value >= 0;
+    }
+
+    private UtilityBill prepareBill(UtilityBill bill, UtilityBill stagedPrevious) {
         if (bill.getId() == null || bill.getId().isEmpty()) {
             bill.setId("bill-" + UUID.randomUUID().toString().substring(0, 8));
         } else if (repo.existsById(bill.getId())) {
@@ -87,6 +180,10 @@ public class UtilityBillController {
                 .filter(old -> safeMonth(old.getBillingMonth()).isBefore(targetMonth))
                 .max(Comparator.comparing(old -> safeMonth(old.getBillingMonth())))
                 .orElse(null);
+        if (stagedPrevious != null && safeMonth(stagedPrevious.getBillingMonth()).isBefore(targetMonth)
+                && (previous == null || safeMonth(previous.getBillingMonth()).isBefore(safeMonth(stagedPrevious.getBillingMonth())))) {
+            previous = stagedPrevious;
+        }
         double arrears = previous == null ? 0 : outstanding(previous);
         double interestRate = settingsRepo.findById("default").map(BillingSettings::getMonthlyInterestRate).orElse(0.0);
         double interestAmount = roundMoney(arrears * interestRate / 100.0);
@@ -98,8 +195,16 @@ public class UtilityBillController {
         bill.setBalanceDue(bill.getAmountDue());
         bill.setStatus("Unpaid");
 
+        return bill;
+    }
+
+    private UtilityBill persistBill(UtilityBill bill) {
+        return persistBill(bill, true);
+    }
+
+    private UtilityBill persistBill(UtilityBill bill, boolean updateRoomMeters) {
         UtilityBill saved = repo.save(bill);
-        if (saved.getRoomId() != null) {
+        if (updateRoomMeters && saved.getRoomId() != null) {
             roomRepo.findById(saved.getRoomId()).ifPresent(room -> {
                 room.setPrevWaterMeter(saved.getCurrWaterMeter());
                 room.setPrevElectricMeter(saved.getCurrElectricMeter());
@@ -108,6 +213,18 @@ public class UtilityBillController {
         }
         logService.log("Utility Bill Created", String.format("Created bill %s for Unit %s (%.0f THB due)", saved.getInvoiceNo(), saved.getRoomNumber(), saved.getAmountDue()));
         return saved;
+    }
+
+    private void syncRoomMetersFromLatestBill(String roomId) {
+        UtilityBill latest = repo.findByRoomIdOrderByCreatedAtDesc(roomId).stream()
+                .max(Comparator.comparing(bill -> safeMonth(bill.getBillingMonth())))
+                .orElse(null);
+        if (latest == null) return;
+        roomRepo.findById(roomId).ifPresent(room -> {
+            room.setPrevWaterMeter(latest.getCurrWaterMeter());
+            room.setPrevElectricMeter(latest.getCurrElectricMeter());
+            roomRepo.save(room);
+        });
     }
 
     @PutMapping("/{id}")
