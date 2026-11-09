@@ -619,7 +619,9 @@ export const MaintenanceManagement: React.FC = () => {
                     </td>
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        task.priority === 'High' ? 'bg-rose-500/10 text-rose-600' : 'bg-blue-500/10 text-blue-600'
+                        task.priority === 'High' ? 'bg-rose-500/10 text-rose-600'
+                          : task.priority === 'Medium' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                          : 'bg-blue-500/10 text-blue-600'
                       }`}>
                         {task.priority}
                       </span>

@@ -5,7 +5,7 @@ import { validateBookingLease } from '../utils/bookingLeaseValidation';
 
 const application = {
   fullname: 'Resident', phone: '0812345678', email: 'resident@example.com',
-  idCardPassport: '', emergencyContact: '',
+  idCardPassport: '1234567890123', emergencyContact: '',
 };
 
 afterEach(() => vi.unstubAllGlobals());
@@ -57,8 +57,17 @@ describe('lease form validation and explanations', () => {
   it('identifies both missing required fields, including whitespace-only values', () => {
     expect(validateBookingLease({ ...application, fullname: ' ', phone: '' })).toEqual({ fullname: 'REQUIRED', phone: 'REQUIRED' });
   });
-  it('allows omitted optional ID and emergency contact details', () => {
+  it('allows a numeric phone, 13-digit ID and omitted emergency contact', () => {
     expect(validateBookingLease(application)).toEqual({});
+  });
+  it('requires an ID', () => {
+    expect(validateBookingLease({ ...application, idCardPassport: '' })).toEqual({ idCardPassport: 'REQUIRED' });
+  });
+  it.each(['123456789012', '12345678901234', '123456789012a'])('rejects invalid ID %s', idCardPassport => {
+    expect(validateBookingLease({ ...application, idCardPassport })).toEqual({ idCardPassport: 'INVALID_ID' });
+  });
+  it.each(['081abc5678', '+66812345678', '081-234-5678'])('rejects nonnumeric phone %s', phone => {
+    expect(validateBookingLease({ ...application, phone })).toEqual({ phone: 'INVALID_PHONE' });
   });
   it('identifies invalid email and fields exceeding database limits', () => {
     expect(validateBookingLease({ ...application, email: 'invalid', emergencyContact: 'a'.repeat(256) })).toEqual({

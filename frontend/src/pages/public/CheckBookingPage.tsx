@@ -390,8 +390,11 @@ export const CheckBookingPage: React.FC = () => {
                         type="button"
                         onClick={() => setLeaseBookingId(leaseBookingId === booking.id ? null : booking.id)}
                         aria-expanded={leaseBookingId === booking.id}
-                        className="px-4 py-2 rounded-full text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all cursor-pointer"
+                        className="relative px-4 py-2 rounded-full text-xs font-bold bg-[#0F766E] hover:bg-teal-800 text-white shadow-md shadow-[#0F766E]/25 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F766E] focus-visible:ring-offset-2 cursor-pointer"
                       >
+                        {leaseBookingId !== booking.id && (
+                          <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full border-2 border-[#0F766E] motion-safe:animate-ping [animation-duration:2s]" />
+                        )}
                         {language === 'th' ? 'ทำสัญญาเช่าใหม่' : 'Create New Lease Agreement'}
                       </button>
                     )}
