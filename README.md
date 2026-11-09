@@ -128,14 +128,14 @@
    cp .env.example .env        # แก้รหัสผ่านใน .env ได้ตามต้องการ
    docker compose up -d db
    ```
-   PostgreSQL จะเปิดที่ `localhost:5432` (database `apartmentdb`, user `apartment`)
+   PostgreSQL จะเปิดที่ `localhost:5433` (database `apartment_prediction_dev`, user `apartment`)
    ตาราง (schema) ถูกสร้างอัตโนมัติด้วย Flyway จากไฟล์ใน `backend/src/main/resources/db/migration/` ตอน Backend start
 2. **Backend:**
    ```bash
    cd backend
    mvnw.cmd spring-boot:run   # (หรือ ./mvnw spring-boot:run บน macOS/Linux)
    ```
-   Backend จะเปิดทำงานที่ `http://localhost:8080`
+   Backend จะเปิดทำงานที่ `http://localhost:8083`
    (ถ้าเปลี่ยน user/password ใน `.env` ให้ตั้ง `DB_USERNAME` / `DB_PASSWORD` ให้ตรงกันก่อนรัน)
 3. **Frontend:** เปิด Terminal อีกหน้าต่าง
    ```bash
@@ -143,7 +143,7 @@
    npm install
    npm run dev
    ```
-   Frontend จะเปิดทำงานที่ `http://localhost:3000`
+   Frontend จะเปิดทำงานที่ `http://localhost:3001`
 
 ---
 
@@ -166,7 +166,7 @@
 3. คำสั่งปิดระบบ:
    ```bash
    docker compose down        # ข้อมูลยังอยู่ใน volume pgdata
-   docker compose down -v     # ⚠️ ลบข้อมูลในฐานข้อมูลทิ้งทั้งหมด
+   docker compose down -v     # ลบข้อมูลในฐานข้อมูลทิ้งทั้งหมด
    ```
 
 ---
