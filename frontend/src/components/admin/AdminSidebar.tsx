@@ -186,9 +186,6 @@ export const AdminSidebar: React.FC = () => {
                   <KeyRound className="w-4 h-4 text-amber-400" />
                   <span>{t('admin.nav.changePassword')}</span>
                 </div>
-                <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  ROTATION
-                </span>
               </button>
               <Link
                 to="/rooms"
@@ -291,9 +288,6 @@ export const AdminSidebar: React.FC = () => {
               <span className="flex items-center gap-2">
                 <KeyRound className="w-3.5 h-3.5 text-amber-400" />
                 <span>{t('admin.nav.changePassword')}</span>
-              </span>
-              <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                ROTATION
               </span>
             </button>
 
