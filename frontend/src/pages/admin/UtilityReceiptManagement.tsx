@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UtilityBill, Room, Lease, RentQuote, BillPayment } from '../../types';
+import { UtilityBill, Room, Lease, RentQuote, BillPayment, BankInfo } from '../../types';
 import { getUtilityBills, saveUtilityBill, updateBillStatus, getRooms, getLeases, getRentQuote, getBillPayments, addBillPayment, getBillingSettings, saveBillingSettings } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import { currentBillingMonth, recentBillingMonths } from '../../utils/billingMonth';
-import { FileText, Plus, Printer, Droplets, Zap, Search, Building2 } from 'lucide-react';
+import { FileText, Plus, Printer, Droplets, Zap, Search, Building2, Landmark } from 'lucide-react';
 import { ReceiptModal } from '../../components/admin/ReceiptModal';
 import { BillPaymentModal } from '../../components/admin/BillPaymentModal';
 import { BulkReceiptModal } from '../../components/admin/BulkReceiptModal';
+import { BankInfoModal } from '../../components/admin/BankInfoModal';
 import { ScannedDocumentModal } from '../../components/admin/ScannedDocumentModal';
 import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'sonner';
@@ -68,6 +69,8 @@ export const UtilityReceiptManagement: React.FC = () => {
   const [paymentHistory, setPaymentHistory] = useState<BillPayment[]>([]);
   const [monthlyInterestRate, setMonthlyInterestRate] = useState(0);
   const [savedInterestRate, setSavedInterestRate] = useState(0);
+  const [bankInfo, setBankInfo] = useState<BankInfo | null>(null);
+  const [showBankModal, setShowBankModal] = useState(false);
   const [monthFilter, setMonthFilter] = useState<string>('All');
   const [buildingFilter, setBuildingFilter] = useState<string>(initialBuildingId);
 
@@ -129,6 +132,12 @@ export const UtilityReceiptManagement: React.FC = () => {
       const settings = await getBillingSettings();
       setMonthlyInterestRate(settings.monthlyInterestRate);
       setSavedInterestRate(settings.monthlyInterestRate);
+      setBankInfo({
+        bankName: settings.bankName,
+        accountName: settings.accountName,
+        accountNumber: settings.accountNumber,
+        qrCodeImage: settings.qrCodeImage,
+      });
     } catch (err) {
       console.error('Failed to fetch utility bills data:', err);
     }
@@ -251,9 +260,7 @@ export const UtilityReceiptManagement: React.FC = () => {
   const electricUnitsPreview = Math.max(0, (billFormData.currElectricMeter || 0) - (billFormData.prevElectricMeter || 0));
   const waterAmtPreview = waterUnitsPreview * (billFormData.waterRate || 9);
   const electricAmtPreview = electricUnitsPreview * (billFormData.electricRate || 4);
-  const extraChargeRoom = rooms.find(r => r.id === billFormData.roomId);
-  const extraChargePreview = extraChargeRoom?.extraChargeAmount || 0;
-  const totalAmtPreview = (rentQuote?.rentAmount || 0) + waterAmtPreview + electricAmtPreview + (billFormData.commonFee || 0) + extraChargePreview;
+  const totalAmtPreview = (rentQuote?.rentAmount || 0) + waterAmtPreview + electricAmtPreview + (billFormData.commonFee || 0);
 
   const monthIndex = (value: string) => {
     const [month, year] = value.split(' ');
@@ -314,6 +321,13 @@ export const UtilityReceiptManagement: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowBankModal(true)}
+            className="px-4 py-2.5 text-xs font-semibold rounded-xl border border-nike-hairline dark:border-nike-dark-card text-nike-ink dark:text-white hover:bg-nike-soft-cloud dark:hover:bg-nike-dark-card transition-all flex items-center gap-2"
+          >
+            <Landmark className="w-4 h-4" /> {language === 'th' ? 'บัญชีธนาคาร / QR' : 'Bank & QR'}
+          </button>
           <button
             onClick={handleOpenNewBillModal}
             className="px-4 py-2.5 text-xs font-semibold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-sm"
@@ -786,12 +800,6 @@ export const UtilityReceiptManagement: React.FC = () => {
                   <span>{language === 'th' ? 'ค่าส่วนกลาง:' : 'Common Fee:'}</span>
                   <span className="font-semibold text-nike-ink dark:text-white">{formatCurrency(billFormData.commonFee || 300)}</span>
                 </div>
-                {extraChargePreview > 0 && (
-                  <div className="flex justify-between text-nike-mute">
-                    <span>{extraChargeRoom?.extraChargeLabel || (language === 'th' ? 'ค่าใช้จ่ายเสริม' : 'Extra charge')}:</span>
-                    <span className="font-semibold text-nike-ink dark:text-white">{formatCurrency(extraChargePreview)}</span>
-                  </div>
-                )}
                 {carryForwardPreview > 0 ? (
                   <div className="mt-2 rounded-lg border border-amber-300/70 dark:border-amber-700/60 bg-amber-50/70 dark:bg-amber-950/20 p-3 space-y-2">
                     <div className="flex justify-between font-semibold text-amber-800 dark:text-amber-300">
@@ -882,6 +890,18 @@ export const UtilityReceiptManagement: React.FC = () => {
         <BulkReceiptModal
           bills={filteredBills.filter(b => selectedBillIds.length > 0 ? selectedBillIds.includes(b.id) : true)}
           onClose={() => setShowBulkPrintModal(false)}
+        />
+      )}
+
+      {/* BANK ACCOUNT / QR SETTINGS */}
+      {showBankModal && (
+        <BankInfoModal
+          initial={bankInfo}
+          onClose={() => setShowBankModal(false)}
+          onSaved={info => {
+            setBankInfo(info);
+            toast.success(language === 'th' ? 'บันทึกข้อมูลบัญชีแล้ว' : 'Bank details saved');
+          }}
         />
       )}
 

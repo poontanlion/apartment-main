@@ -3,7 +3,7 @@ import {
   MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication,
 
   RoomPrice, RoomPriceHistory, RentQuote, MaintenancePredictionFilters, MaintenancePredictionResponse, MaintenancePredictionRow, 
-  SummaryReport, SummaryReportFilters
+  SummaryReport, SummaryReportFilters, BankInfo, BillingSettings
 
 } from '../types';
 import { BookingLeaseError } from '../utils/bookingLeaseErrors';
@@ -248,12 +248,18 @@ export const saveUtilityBill = async (billData: Partial<UtilityBill>): Promise<U
   });
 };
 
-export const getBillingSettings = (): Promise<{ id: string; monthlyInterestRate: number }> =>
-  fetchJson<{ id: string; monthlyInterestRate: number }>(`${API_BASE}/billing-settings`);
+export const getBillingSettings = (): Promise<BillingSettings> =>
+  fetchJson<BillingSettings>(`${API_BASE}/billing-settings`);
 
-export const saveBillingSettings = (monthlyInterestRate: number): Promise<{ id: string; monthlyInterestRate: number }> =>
-  fetchJson<{ id: string; monthlyInterestRate: number }>(`${API_BASE}/billing-settings`, {
+export const saveBillingSettings = (monthlyInterestRate: number): Promise<BillingSettings> =>
+  fetchJson<BillingSettings>(`${API_BASE}/billing-settings`, {
     method: 'PUT', body: JSON.stringify({ monthlyInterestRate }),
+  });
+
+/** Blank fields clear the stored value. */
+export const saveBankInfo = (info: BankInfo): Promise<BillingSettings> =>
+  fetchJson<BillingSettings>(`${API_BASE}/billing-settings/bank-info`, {
+    method: 'PUT', body: JSON.stringify(info),
   });
 
 export const updateBillStatus = async (billId: string, status: BillStatus, slipImage?: string, scannedDocument?: string): Promise<UtilityBill | null> => {

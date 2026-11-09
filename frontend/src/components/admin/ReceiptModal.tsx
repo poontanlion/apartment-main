@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { UtilityBill } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { Printer, X, Receipt, Download, Building2 } from 'lucide-react';
+import { InvoicePaymentInfo } from './InvoicePaymentInfo';
+import { useBankInfo } from '../../hooks/useBankInfo';
 
 interface ReceiptModalProps {
   bill: UtilityBill;
@@ -9,6 +11,7 @@ interface ReceiptModalProps {
 }
 
 export const ReceiptModal: React.FC<ReceiptModalProps> = ({ bill, onClose }) => {
+  const bankInfo = useBankInfo();
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -153,16 +156,6 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ bill, onClose }) => 
                   <td className="border border-slate-300 p-2 print:py-1.5 text-right font-extrabold">{formatCurrency(bill.commonFee)}</td>
                 </tr>
               )}
-              {(bill.extraChargeAmount || 0) > 0 && (
-                <tr>
-                  <td className="border border-slate-300 p-2 print:py-1.5 font-semibold">{bill.extraChargeLabel || 'Extra charge'}</td>
-                  <td className="border border-slate-300 p-2 print:py-1.5 text-center text-slate-400">-</td>
-                  <td className="border border-slate-300 p-2 print:py-1.5 text-center text-slate-400">-</td>
-                  <td className="border border-slate-300 p-2 print:py-1.5 text-center">Flat</td>
-                  <td className="border border-slate-300 p-2 print:py-1.5 text-right">{formatCurrency(bill.extraChargeAmount)}</td>
-                  <td className="border border-slate-300 p-2 print:py-1.5 text-right font-extrabold">{formatCurrency(bill.extraChargeAmount)}</td>
-                </tr>
-              )}
             </tbody>
             <tfoot>
               {(bill.balanceForwardAmount || 0) > 0 && <tr><td colSpan={5} className="border border-slate-300 p-2 text-right font-semibold">Previous balance carried forward</td><td className="border border-slate-300 p-2 text-right font-bold">{formatCurrency(bill.balanceForwardAmount)}</td></tr>}
@@ -175,6 +168,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ bill, onClose }) => 
               {(bill.balanceDue ?? 0) > 0 && <tr><td colSpan={5} className="border border-slate-300 p-2 text-right font-semibold">Remaining balance</td><td className="border border-slate-300 p-2 text-right font-bold">{formatCurrency(bill.balanceDue)}</td></tr>}
             </tfoot>
           </table>
+
+          {/* BANK DETAILS / QR (only while something is still owed) */}
+          {bill.status !== 'Paid' && <InvoicePaymentInfo info={bankInfo} />}
 
           {/* SIGNATURE SECTION */}
           <div className="pt-6 print:pt-4 border-t border-slate-300 grid grid-cols-2 gap-8 text-center text-xs">

@@ -50,9 +50,6 @@ export interface Room {
   currWaterMeter?: number;
   prevElectricMeter?: number;
   currElectricMeter?: number;
-  /** Optional recurring charge added to this room's bills (e.g. parking). */
-  extraChargeLabel?: string;
-  extraChargeAmount?: number;
   createdAt?: string;
 }
 
@@ -145,8 +142,6 @@ export interface UtilityBill {
   electricRate: number;
   electricAmount: number;
   commonFee: number;
-  extraChargeLabel?: string;
-  extraChargeAmount?: number;
   totalAmount: number;
   balanceForwardAmount?: number;
   interestRate?: number;
@@ -159,6 +154,20 @@ export interface UtilityBill {
   slipImage?: string;
   scannedDocument?: string;
   createdAt: string;
+}
+
+/** Where tenants send payment; printed on invoices. Every field is optional. */
+export interface BankInfo {
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  /** Image data URL of the transfer QR code. */
+  qrCodeImage?: string;
+}
+
+export interface BillingSettings extends BankInfo {
+  id: string;
+  monthlyInterestRate: number;
 }
 
 export type ReportGroupBy = 'UNIT' | 'TENANT' | 'MONTH' | 'YEAR';
