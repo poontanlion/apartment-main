@@ -153,6 +153,16 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ bill, onClose }) => 
                   <td className="border border-slate-300 p-2 print:py-1.5 text-right font-extrabold">{formatCurrency(bill.commonFee)}</td>
                 </tr>
               )}
+              {(bill.extraChargeAmount || 0) > 0 && (
+                <tr>
+                  <td className="border border-slate-300 p-2 print:py-1.5 font-semibold">{bill.extraChargeLabel || 'Extra charge'}</td>
+                  <td className="border border-slate-300 p-2 print:py-1.5 text-center text-slate-400">-</td>
+                  <td className="border border-slate-300 p-2 print:py-1.5 text-center text-slate-400">-</td>
+                  <td className="border border-slate-300 p-2 print:py-1.5 text-center">Flat</td>
+                  <td className="border border-slate-300 p-2 print:py-1.5 text-right">{formatCurrency(bill.extraChargeAmount)}</td>
+                  <td className="border border-slate-300 p-2 print:py-1.5 text-right font-extrabold">{formatCurrency(bill.extraChargeAmount)}</td>
+                </tr>
+              )}
             </tbody>
             <tfoot>
               {(bill.balanceForwardAmount || 0) > 0 && <tr><td colSpan={5} className="border border-slate-300 p-2 text-right font-semibold">Previous balance carried forward</td><td className="border border-slate-300 p-2 text-right font-bold">{formatCurrency(bill.balanceForwardAmount)}</td></tr>}

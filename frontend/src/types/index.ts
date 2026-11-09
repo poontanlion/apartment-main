@@ -50,6 +50,9 @@ export interface Room {
   currWaterMeter?: number;
   prevElectricMeter?: number;
   currElectricMeter?: number;
+  /** Optional recurring charge added to this room's bills (e.g. parking). */
+  extraChargeLabel?: string;
+  extraChargeAmount?: number;
   createdAt?: string;
 }
 
@@ -142,6 +145,8 @@ export interface UtilityBill {
   electricRate: number;
   electricAmount: number;
   commonFee: number;
+  extraChargeLabel?: string;
+  extraChargeAmount?: number;
   totalAmount: number;
   balanceForwardAmount?: number;
   interestRate?: number;

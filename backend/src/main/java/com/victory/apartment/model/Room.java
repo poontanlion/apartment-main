@@ -41,6 +41,10 @@ public class Room {
     private Double prevElectricMeter;
     private Double currElectricMeter;
 
+    /** Optional recurring charge on top of rent/water/electric, e.g. parking or internet. */
+    private String extraChargeLabel;
+    private Double extraChargeAmount;
+
     private LocalDateTime createdAt;
 
     public Room() {}
@@ -111,6 +115,12 @@ public class Room {
 
     public Double getCurrElectricMeter() { return currElectricMeter; }
     public void setCurrElectricMeter(Double currElectricMeter) { this.currElectricMeter = currElectricMeter; }
+
+    public String getExtraChargeLabel() { return extraChargeLabel; }
+    public void setExtraChargeLabel(String extraChargeLabel) { this.extraChargeLabel = extraChargeLabel; }
+
+    public Double getExtraChargeAmount() { return extraChargeAmount; }
+    public void setExtraChargeAmount(Double extraChargeAmount) { this.extraChargeAmount = extraChargeAmount; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

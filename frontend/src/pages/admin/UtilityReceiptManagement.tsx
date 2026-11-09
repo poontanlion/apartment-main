@@ -251,7 +251,9 @@ export const UtilityReceiptManagement: React.FC = () => {
   const electricUnitsPreview = Math.max(0, (billFormData.currElectricMeter || 0) - (billFormData.prevElectricMeter || 0));
   const waterAmtPreview = waterUnitsPreview * (billFormData.waterRate || 9);
   const electricAmtPreview = electricUnitsPreview * (billFormData.electricRate || 4);
-  const totalAmtPreview = (rentQuote?.rentAmount || 0) + waterAmtPreview + electricAmtPreview + (billFormData.commonFee || 0);
+  const extraChargeRoom = rooms.find(r => r.id === billFormData.roomId);
+  const extraChargePreview = extraChargeRoom?.extraChargeAmount || 0;
+  const totalAmtPreview = (rentQuote?.rentAmount || 0) + waterAmtPreview + electricAmtPreview + (billFormData.commonFee || 0) + extraChargePreview;
 
   const monthIndex = (value: string) => {
     const [month, year] = value.split(' ');
@@ -784,6 +786,12 @@ export const UtilityReceiptManagement: React.FC = () => {
                   <span>{language === 'th' ? 'ค่าส่วนกลาง:' : 'Common Fee:'}</span>
                   <span className="font-semibold text-nike-ink dark:text-white">{formatCurrency(billFormData.commonFee || 300)}</span>
                 </div>
+                {extraChargePreview > 0 && (
+                  <div className="flex justify-between text-nike-mute">
+                    <span>{extraChargeRoom?.extraChargeLabel || (language === 'th' ? 'ค่าใช้จ่ายเสริม' : 'Extra charge')}:</span>
+                    <span className="font-semibold text-nike-ink dark:text-white">{formatCurrency(extraChargePreview)}</span>
+                  </div>
+                )}
                 {carryForwardPreview > 0 ? (
                   <div className="mt-2 rounded-lg border border-amber-300/70 dark:border-amber-700/60 bg-amber-50/70 dark:bg-amber-950/20 p-3 space-y-2">
                     <div className="flex justify-between font-semibold text-amber-800 dark:text-amber-300">

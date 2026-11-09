@@ -28,6 +28,8 @@ public class UtilityBill {
     private Double electricRate;
     private Double electricAmount;
     private Double commonFee;
+    private String extraChargeLabel;
+    private Double extraChargeAmount;
     private Double totalAmount; // Charges for this billing month only
     @Column(name = "previous_outstanding", nullable = false)
     private Double balanceForwardAmount = 0.0;
@@ -97,6 +99,10 @@ public class UtilityBill {
     public void setElectricAmount(Double electricAmount) { this.electricAmount = electricAmount; }
     public Double getCommonFee() { return commonFee; }
     public void setCommonFee(Double commonFee) { this.commonFee = commonFee; }
+    public String getExtraChargeLabel() { return extraChargeLabel; }
+    public void setExtraChargeLabel(String extraChargeLabel) { this.extraChargeLabel = extraChargeLabel; }
+    public Double getExtraChargeAmount() { return extraChargeAmount; }
+    public void setExtraChargeAmount(Double extraChargeAmount) { this.extraChargeAmount = extraChargeAmount; }
     public Double getTotalAmount() { return totalAmount; }
     public void setTotalAmount(Double totalAmount) { this.totalAmount = totalAmount; }
     public Double getBalanceForwardAmount() { return balanceForwardAmount; }

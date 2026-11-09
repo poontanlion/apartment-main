@@ -33,6 +33,8 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
   const [bedType, setBedType] = useState(room?.bedType || 'King Bed');
   const [status, setStatus] = useState<RoomStatus>(room?.status || 'Available');
   const [description, setDescription] = useState(room?.description || '');
+  const [extraChargeLabel, setExtraChargeLabel] = useState(room?.extraChargeLabel || '');
+  const [extraChargeAmount, setExtraChargeAmount] = useState<number | ''>(room?.extraChargeAmount || '');
   const [coverImage, setCoverImage] = useState(room?.coverImage || 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80');
 
   useEffect(() => {
@@ -90,6 +92,9 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
       description,
       amenities: JSON.stringify(amenities),
       coverImage,
+      // 0 clears the charge (the API only applies fields that are sent).
+      extraChargeAmount: Number(extraChargeAmount) || 0,
+      extraChargeLabel: Number(extraChargeAmount) > 0 ? extraChargeLabel.trim() : '',
     });
     onClose();
   };
@@ -204,6 +209,40 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
                 {language === 'th' ? 'ขนาด (ตร.ม.)' : 'Size (sqm)'}
               </label>
               <input type="number" required min="1" value={sizeSqm} onChange={e => setSizeSqm(Number(e.target.value))} className={inputClass} />
+            </div>
+          </div>
+
+          <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="room-extra-label" className="block font-medium mb-1.5 text-nike-ink dark:text-white">
+                  {language === 'th' ? 'ค่าใช้จ่ายเสริม - ชื่อรายการ (ไม่บังคับ)' : 'Extra charge name (optional)'}
+                </label>
+                <input
+                  id="room-extra-label"
+                  type="text"
+                  maxLength={100}
+                  value={extraChargeLabel}
+                  onChange={e => setExtraChargeLabel(e.target.value)}
+                  placeholder={language === 'th' ? 'เช่น ค่าที่จอดรถ, ค่าอินเทอร์เน็ต' : 'e.g. Parking, Internet'}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="room-extra-amount" className="block font-medium mb-1.5 text-nike-ink dark:text-white">
+                  {language === 'th' ? 'ค่าใช้จ่ายเสริมต่อเดือน (บาท)' : 'Extra charge per month (THB)'}
+                </label>
+                <input
+                  id="room-extra-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={extraChargeAmount}
+                  onChange={e => setExtraChargeAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="0"
+                  className={inputClass}
+                />
+              </div>
             </div>
           </div>
 

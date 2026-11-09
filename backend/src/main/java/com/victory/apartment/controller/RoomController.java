@@ -60,6 +60,9 @@ public class RoomController {
         if (room.getSizeSqm() == null) room.setSizeSqm(28.0);
         if (room.getAmenities() == null) room.setAmenities("[]");
         if (room.getGallery() == null) room.setGallery("[]");
+        if (room.getExtraChargeAmount() != null) {
+            applyExtraCharge(room, room.getExtraChargeAmount(), room.getExtraChargeLabel());
+        }
         if (room.getPrevWaterMeter() == null) room.setPrevWaterMeter(0.0);
         if (room.getCurrWaterMeter() == null) room.setCurrWaterMeter(0.0);
         if (room.getPrevElectricMeter() == null) room.setPrevElectricMeter(0.0);
@@ -112,6 +115,10 @@ public class RoomController {
             if (incoming.getCurrentTenantName() != null) existing.setCurrentTenantName(incoming.getCurrentTenantName());
             if (incoming.getBuildingId() != null) existing.setBuildingId(incoming.getBuildingId());
             if (incoming.getBuildingName() != null) existing.setBuildingName(incoming.getBuildingName());
+            // Zero clears the charge; the field can't be nulled because only non-null fields are applied.
+            if (incoming.getExtraChargeAmount() != null) {
+                applyExtraCharge(existing, incoming.getExtraChargeAmount(), incoming.getExtraChargeLabel());
+            }
             if (incoming.getPrevWaterMeter() != null) existing.setPrevWaterMeter(incoming.getPrevWaterMeter());
             if (incoming.getCurrWaterMeter() != null) existing.setCurrWaterMeter(incoming.getCurrWaterMeter());
             if (incoming.getPrevElectricMeter() != null) existing.setPrevElectricMeter(incoming.getPrevElectricMeter());
@@ -155,6 +162,28 @@ public class RoomController {
     public MonthPrice getPriceForMonth(@PathVariable String id, @RequestParam String month) {
         YearMonth parsed = parseMonth(month);
         return new MonthPrice(parsed.toString(), priceService.priceFor(findRoom(id), parsed));
+    }
+
+    private static final int EXTRA_CHARGE_LABEL_MAX = 100;
+    private static final String DEFAULT_EXTRA_CHARGE_LABEL = "Other charges";
+
+    /** An amount of zero means no extra charge; a positive amount needs a label (defaulted when blank). */
+    private static void applyExtraCharge(Room room, double amount, String label) {
+        if (Double.isNaN(amount) || Double.isInfinite(amount) || amount < 0) {
+            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "INVALID_EXTRA_CHARGE", "Extra charge must be zero or more.");
+        }
+        if (amount == 0) {
+            room.setExtraChargeAmount(null);
+            room.setExtraChargeLabel(null);
+            return;
+        }
+        String clean = label == null ? "" : label.trim();
+        if (clean.length() > EXTRA_CHARGE_LABEL_MAX) {
+            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "INVALID_EXTRA_CHARGE_LABEL",
+                "Extra charge name must be at most " + EXTRA_CHARGE_LABEL_MAX + " characters.");
+        }
+        room.setExtraChargeAmount(Math.round(amount * 100.0) / 100.0);
+        room.setExtraChargeLabel(clean.isEmpty() ? DEFAULT_EXTRA_CHARGE_LABEL : clean);
     }
 
     private Room findRoom(String id) {

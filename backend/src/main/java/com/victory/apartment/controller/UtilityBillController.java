@@ -80,6 +80,7 @@ public class UtilityBillController {
         }
         bill.setRentAmount(quote.rentAmount());
         bill.setLeaseId(quote.leaseId());
+        applyExtraCharge(bill);
         calculateAmounts(bill);
 
         UtilityBill previous = repo.findByRoomIdOrderByCreatedAtDesc(bill.getRoomId()).stream()
@@ -119,6 +120,11 @@ public class UtilityBillController {
             bill.setInterestRate(nz(stored.getInterestRate()));
             bill.setInterestAmount(nz(stored.getInterestAmount()));
             bill.setPaidAmount(nz(stored.getPaidAmount()));
+            if (bill.getExtraChargeAmount() == null) {
+                bill.setExtraChargeAmount(stored.getExtraChargeAmount());
+                bill.setExtraChargeLabel(stored.getExtraChargeLabel());
+            }
+            validateExtraCharge(bill);
             calculateAmounts(bill);
             bill.setAmountDue(roundMoney(nz(bill.getTotalAmount()) + nz(bill.getBalanceForwardAmount()) + nz(bill.getInterestAmount())));
             bill.setBalanceDue(Math.max(0, roundMoney(bill.getAmountDue() - bill.getPaidAmount())));
@@ -141,7 +147,37 @@ public class UtilityBillController {
         double electricUnits = Math.max(0, nz(bill.getCurrElectricMeter()) - nz(bill.getPrevElectricMeter()));
         bill.setWaterAmount(waterUnits * (bill.getWaterRate() != null ? bill.getWaterRate() : 9.0));
         bill.setElectricAmount(electricUnits * (bill.getElectricRate() != null ? bill.getElectricRate() : 4.0));
-        bill.setTotalAmount(nz(bill.getRentAmount()) + nz(bill.getWaterAmount()) + nz(bill.getElectricAmount()) + (bill.getCommonFee() != null ? bill.getCommonFee() : 300));
+        bill.setTotalAmount(nz(bill.getRentAmount()) + nz(bill.getWaterAmount()) + nz(bill.getElectricAmount())
+                + (bill.getCommonFee() != null ? bill.getCommonFee() : 300) + nz(bill.getExtraChargeAmount()));
+    }
+
+    /** A new bill takes the room's extra charge unless the request names one (zero means none this month). */
+    private void applyExtraCharge(UtilityBill bill) {
+        if (bill.getExtraChargeAmount() == null) {
+            roomRepo.findById(bill.getRoomId()).ifPresent(room -> {
+                bill.setExtraChargeLabel(room.getExtraChargeLabel());
+                bill.setExtraChargeAmount(room.getExtraChargeAmount());
+            });
+        }
+        validateExtraCharge(bill);
+    }
+
+    private void validateExtraCharge(UtilityBill bill) {
+        double amount = nz(bill.getExtraChargeAmount());
+        if (Double.isNaN(amount) || Double.isInfinite(amount) || amount < 0) {
+            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "INVALID_EXTRA_CHARGE", "Extra charge must be zero or more.");
+        }
+        if (amount == 0) {
+            bill.setExtraChargeAmount(null);
+            bill.setExtraChargeLabel(null);
+            return;
+        }
+        String label = bill.getExtraChargeLabel() == null ? "" : bill.getExtraChargeLabel().trim();
+        if (label.length() > 100) {
+            throw new PriceRuleException(HttpStatus.BAD_REQUEST, "INVALID_EXTRA_CHARGE_LABEL", "Extra charge name must be at most 100 characters.");
+        }
+        bill.setExtraChargeAmount(roundMoney(amount));
+        bill.setExtraChargeLabel(label.isEmpty() ? "Other charges" : label);
     }
 
     @GetMapping("/{id}/payments")

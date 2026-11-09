@@ -173,6 +173,50 @@ public class UtilityBillControllerTest {
     }
 
     @Test
+    void createBill_addsTheRoomsExtraCharge() throws Exception {
+        saveReturnsArgument();
+        mockRoom.setExtraChargeLabel("Parking");
+        mockRoom.setExtraChargeAmount(500.0);
+        Mockito.when(roomRepository.findById("rm-123")).thenReturn(Optional.of(mockRoom));
+
+        mockMvc.perform(post("/api/utility-bills")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(billWithUsage())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.extraChargeLabel").value("Parking"))
+                .andExpect(jsonPath("$.extraChargeAmount").value(500.0))
+                .andExpect(jsonPath("$.totalAmount").value(7192.0));
+    }
+
+    @Test
+    void createBill_zeroExtraChargeSkipsTheRoomsCharge() throws Exception {
+        saveReturnsArgument();
+        mockRoom.setExtraChargeLabel("Parking");
+        mockRoom.setExtraChargeAmount(500.0);
+        Mockito.when(roomRepository.findById("rm-123")).thenReturn(Optional.of(mockRoom));
+        UtilityBill bill = billWithUsage();
+        bill.setExtraChargeAmount(0.0);
+
+        mockMvc.perform(post("/api/utility-bills")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(bill)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.extraChargeAmount").doesNotExist())
+                .andExpect(jsonPath("$.totalAmount").value(6692.0));
+    }
+
+    @Test
+    void createBill_rejectsNegativeExtraCharge() throws Exception {
+        UtilityBill bill = billWithUsage();
+        bill.setExtraChargeAmount(-1.0);
+
+        mockMvc.perform(post("/api/utility-bills")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(bill)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void createBill_setsLeaseIdFromQuote() throws Exception {
         saveReturnsArgument();
         UtilityBill bill = billWithUsage();
