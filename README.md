@@ -339,33 +339,35 @@
 ---
 
 ## 6. ระบบ Observability, Log, Trace, Metric ใน Grafana (Full Stack)
+> **อ้างอิงตามแนวทาง Class Week 13: Observability 101 (SpringBootObservability)**
 
-โปรเจกต์ได้รับการติดตั้งระบบ Observability ครบวงจรตามแนวทาง **Observability 101 (Grafana Observability Stack)** โดยรวม 3 เสาหลัก:
-1. **Metrics:** Spring Boot Actuator + Micrometer $\rightarrow$ **Prometheus** (Time Series DB)
-2. **Traces:** OpenTelemetry OTLP Tracer $\rightarrow$ **Grafana Tempo**
-3. **Logs:** Structured Logging (ผูก `traceId` และ `spanId`) $\rightarrow$ **Promtail** $\rightarrow$ **Grafana Loki**
-4. **Single Pane of Glass:** **Grafana** (Dashboards, Datasources และ Correlation เชื่อม Log ไปยัง Trace ได้ในคลิกเดียว)
+โปรเจกต์ได้รับการติดตั้งระบบ Observability ครบวงจร 3 เสาหลัก รวมเข้ากับ **Single Pane of Glass บน Grafana**:
+1. **Metrics (Prometheus):** Spring Boot Actuator + Micrometer รวบรวมทั้ง **Business Value Metrics** (อัตราเข้าพัก, รายได้, หนี้ค้าง, งานซ่อม) และ **Monitoring Value Metrics** (RED Method: RPS, 5xx Errors, Latency, JVM Memory)
+2. **Traces (Grafana Tempo):** OpenTelemetry OTLP Tracer รองรับ **Multi-layer Nested Spans (`@NewSpan`)** แสดง Waterfall Tree ตั้งแต่ระดับ HTTP Controller ลึกลงไปยัง Service Layer (ตาม Slide 6, 8, 9)
+3. **Logs (Grafana Loki):** ส่ง Log ตรงด้วย **`loki-logback-appender` (Loki4j)** และ Promtail พร้อมกำกับ `service_name` และ pattern `[%X{traceId:-}%X{spanId:-}]` เพื่อทำ **Trace to Log Correlation** ในคลิกเดียว (ตาม Slide 4, 10)
+4. **Dashboards & Alerting (Grafana):** แดชบอร์ดสำเร็จรูป 2 ชุด พร้อมกฎแจ้งเตือน 8 ข้อ (4 Monitoring Alerts + 4 Business Alerts)
 
-### 6.1 ภาพรวมสถาปัตยกรรม (Grafana LGTM Stack)
-- รายละเอียดสถาปัตยกรรมและการตั้งค่าเชิงลึกอยู่ในเอกสาร **[OBSERVABILITY_GUIDE.md](OBSERVABILITY_GUIDE.md)**
+### 6.1 ภาพรวมสถาปัตยกรรมและคู่มือฉบับสมบูรณ์
+รายละเอียดโค้ดการตั้งค่า, Alerting Rules และสถาปัตยกรรมเชิงลึกทั้งหมด รวบรวมไว้ใน **[OBSERVABILITY_GUIDE.md](OBSERVABILITY_GUIDE.md)**
 
 ### 6.2 การจำแนกประเภท Metric (Monitoring Value vs Business Value)
 
 - **Business Value Metrics (คุณค่าในเชิงธุรกิจหอพัก):**
-  - `apartment_rooms_occupancy_rate`: อัตราการเข้าพัก (% Occupancy) - ตัวชี้วัดสำคัญที่สุดของธุรกิจ
+  - `apartment_rooms_occupancy_rate`: อัตราการเข้าพัก (% Occupancy Rate) - ตัวชี้วัดสูงสุดของธุรกิจ
   - `apartment_rooms_occupied`, `apartment_rooms_available`, `apartment_rooms_maintenance`: จำแนกสต็อกห้องพัก
   - `apartment_bills_total_invoiced` vs `apartment_bills_paid_amount`: ยอดออกบิลรวมเทียบกับเงินสดที่เก็บได้จริง
   - `apartment_bills_outstanding_amount`: ยอดหนี้ค้างชำระสะสมเพื่อติดตามทวงหนี้
-  - `apartment_maintenance_tasks_active`: งานซ่อมที่ค้างอยู่ และงานซ่อมด่วน (High Priority)
+  - `apartment_maintenance_tasks_active`: งานซ่อมที่ค้างอยู่ และงานซ่อมด่วนฉุกเฉิน (High Priority)
   - `apartment_maintenance_predictions_total`: จำนวนอุปกรณ์ที่ระบบ AI พยากรณ์พบความเสี่ยงล่วงหน้า
-- **Monitoring Value Metrics (เชิงวิศวกรรมระบบ & SRE):**
-  - `http_server_requests_seconds_count`: ปริมาณ API Requests Per Second (RPS)
-  - `http_server_requests_seconds_max`: API Response Time / Latency (p95, p99)
-  - `http_server_requests_seconds_count{status=~"5.."}`: Error Rate (HTTP 5xx)
+  - `apartment_bookings_pending`: คำขอจองห้องพักใหม่ที่รออนุมัติ สะท้อนความต้องการของลูกค้า
+- **Monitoring Value Metrics (เชิงวิศวกรรมระบบ & SRE RED Method):**
+  - `http_server_requests_seconds_count`: Throughput หรือคำขอต่อวินาที (RPS)
+  - `http_server_requests_seconds_max`: API Response Time / Latency (p95)
+  - `http_server_requests_seconds_count{status=~"5.."}`: HTTP 5xx Error Rate
   - `jvm_memory_used_bytes{area="heap"}`: การใช้หน่วยความจำ JVM Heap
   - `hikaricp_connections_active` / `pending`: สุขภาพ Connection Pool ของ PostgreSQL
 
-### 6.3 วิธีการเปิดใช้งานและเข้าชมแดชบอร์ด
+### 6.3 วิธีการเปิดใช้งานและเข้าชมระบบ
 
 รันชุด Observability พร้อมกับระบบทั้งหมดผ่าน Docker Compose:
 ```bash
@@ -379,6 +381,10 @@ docker compose -f docker-compose.observability.yml up -d
 
 เข้าชมระบบผ่านเบราว์เซอร์:
 - **Grafana Dashboard:** [http://localhost:3000](http://localhost:3000) (Login: `admin` / `admin`)
-  - เมนู **Dashboards** $\rightarrow$ **Apartment System** $\rightarrow$ **Victory Apartment - Full Observability & Business Value**
-- **Prometheus UI:** [http://localhost:9090](http://localhost:9090)
+  - โฟลเดอร์ **Apartment System**:
+    - `Victory Apartment - Full Observability & Business Value` (apartment-obs-01)
+    - `Victory Apartment - Alerting & Trends` (apartment-obs-02)
+- **Tempo Waterfall Traces:** Grafana เมนู **Explore** $\rightarrow$ เลือก **Tempo** เพื่อดูแท่ง Spans ซ้อนระดับ Controller $\rightarrow$ Service
+- **Loki Logs & Correlation:** Grafana เมนู **Explore** $\rightarrow$ เลือก **Loki** หรือคลิกปุ่ม **TraceID** จาก Log เพื่อเปิดดู Trace
+- **Prometheus UI:** [http://localhost:9090](http://localhost:9090) (ตรวจสอบ Raw Metrics & Alert Rules)
 - **Backend Prometheus Endpoint:** [http://localhost:8080/actuator/prometheus](http://localhost:8080/actuator/prometheus)
