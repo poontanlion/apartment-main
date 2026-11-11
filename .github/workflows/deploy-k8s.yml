@@ -11,7 +11,11 @@ on:
 jobs:
   deploy:
     name: Deploy to Kubernetes Cluster
-    runs-on: ubuntu-latest
+    # This runner must be installed on the Windows host that runs Minikube.
+    runs-on: [self-hosted, Windows, X64]
+    defaults:
+      run:
+        shell: pwsh
     env:
       # workflow_run's github.sha is the default-branch SHA. Deploy the commit
       # that actually produced the Docker images instead.
@@ -23,24 +27,21 @@ jobs:
     steps:
       - name: Validate required deployment secrets
         env:
-          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
-          missing=()
-          for v in KUBECONFIG_DATA DB_USERNAME DB_PASSWORD ADMIN_EMAIL ADMIN_PASSWORD; do
-            if [ -z "${!v}" ]; then
-              name="$v"
-              [ "$v" = "KUBECONFIG_DATA" ] && name="KUBECONFIG"
-              missing+=("$name")
-            fi
-          done
-          if [ "${#missing[@]}" -gt 0 ]; then
-            printf '::error::Missing required GitHub Actions secrets: %s\n' "${missing[*]}"
+          $missing = @()
+          foreach ($name in @('DB_USERNAME', 'DB_PASSWORD', 'ADMIN_EMAIL', 'ADMIN_PASSWORD')) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              $missing += $name
+            }
+          }
+          if ($missing.Count -gt 0) {
+            Write-Error "Missing required GitHub Actions secrets: $($missing -join ', ')"
             exit 1
-          fi
+          }
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,20 +51,18 @@ jobs:
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
 
-      - name: Set up kubeconfig
-        env:
-          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
-        run: |
-          mkdir -p ~/.kube
-          printf '%s\n' "$KUBECONFIG_DATA" > ~/.kube/config
-          chmod 600 ~/.kube/config
-
       - name: Verify Kubernetes access
         run: |
-          if ! kubectl get --raw=/version >/dev/null 2>&1; then
-            echo "::error::KUBECONFIG is present, but the runner cannot connect to the Kubernetes cluster. Check the kubeconfig and service-account access."
+          $context = kubectl config current-context
+          if ($LASTEXITCODE -ne 0 -or $context.Trim() -ne 'minikube') {
+            Write-Error "The runner must use the Minikube context. Current context: $context"
             exit 1
-          fi
+          }
+          kubectl get --raw=/version | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error 'The runner cannot reach the Minikube API. Run this runner under the Windows account that owns the Minikube kubeconfig.'
+            exit 1
+          }
 
       - name: Create/Update DB Secret
         env:
@@ -72,18 +71,25 @@ jobs:
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
-          for v in DB_USERNAME DB_PASSWORD ADMIN_EMAIL ADMIN_PASSWORD; do
-            if [ -z "${!v}" ]; then echo "::error::GitHub secret $v is not set"; exit 1; fi
-          done
-          kubectl create secret generic apartment-db-secret \
-            --from-literal=DB_USERNAME="$DB_USERNAME" \
-            --from-literal=DB_PASSWORD="$DB_PASSWORD" \
-            --from-literal=POSTGRES_DB=apartmentdb \
-            --from-literal=POSTGRES_USER="$DB_USERNAME" \
-            --from-literal=POSTGRES_PASSWORD="$DB_PASSWORD" \
-            --from-literal=ADMIN_EMAIL="$ADMIN_EMAIL" \
-            --from-literal=ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-            --dry-run=client -o yaml | kubectl apply -f -
+          foreach ($name in @('DB_USERNAME', 'DB_PASSWORD', 'ADMIN_EMAIL', 'ADMIN_PASSWORD')) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              Write-Error "GitHub secret $name is not set"
+              exit 1
+            }
+          }
+          $secretArgs = @(
+            'create', 'secret', 'generic', 'apartment-db-secret'
+            "--from-literal=DB_USERNAME=$env:DB_USERNAME"
+            "--from-literal=DB_PASSWORD=$env:DB_PASSWORD"
+            '--from-literal=POSTGRES_DB=apartmentdb'
+            "--from-literal=POSTGRES_USER=$env:DB_USERNAME"
+            "--from-literal=POSTGRES_PASSWORD=$env:DB_PASSWORD"
+            "--from-literal=ADMIN_EMAIL=$env:ADMIN_EMAIL"
+            "--from-literal=ADMIN_PASSWORD=$env:ADMIN_PASSWORD"
+            '--dry-run=client', '-o', 'yaml'
+          )
+          kubectl @secretArgs | kubectl apply -f -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Apply PostgreSQL
         run: |
@@ -100,17 +106,17 @@ jobs:
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          DOCKER_USER="${DOCKERHUB_USERNAME:-pixiz}"
-          kubectl set image deployment/apartment-backend-deployment \
-            backend="${DOCKER_USER}/apartment-backend:sha-${DEPLOY_SHA}"
+          $dockerUser = if ($env:DOCKERHUB_USERNAME) { $env:DOCKERHUB_USERNAME } else { 'pixiz' }
+          kubectl set image deployment/apartment-backend-deployment "backend=$dockerUser/apartment-backend:sha-$env:DEPLOY_SHA"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Update Frontend image to built commit
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          DOCKER_USER="${DOCKERHUB_USERNAME:-pixiz}"
-          kubectl set image deployment/apartment-frontend-deployment \
-            frontend="${DOCKER_USER}/apartment-frontend:sha-${DEPLOY_SHA}"
+          $dockerUser = if ($env:DOCKERHUB_USERNAME) { $env:DOCKERHUB_USERNAME } else { 'pixiz' }
+          kubectl set image deployment/apartment-frontend-deployment "frontend=$dockerUser/apartment-frontend:sha-$env:DEPLOY_SHA"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Wait for Backend rollout
         run: kubectl rollout status deployment/apartment-backend-deployment --timeout=120s
@@ -125,13 +131,13 @@ jobs:
           DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
           DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: |
-          DOCKER_USER="${DOCKERHUB_USERNAME:-pixiz}"
-          {
-            echo "## Deploy to Kubernetes Report"
-            echo "- Status: ${{ job.status }}"
-            echo "- Trigger: ${{ github.event_name }}"
-            echo "- Branch: ${DEPLOY_BRANCH}"
-            echo "- Commit: sha-${DEPLOY_SHA}"
-            echo "- Backend image: ${DOCKER_USER}/apartment-backend:sha-${DEPLOY_SHA}"
-            echo "- Frontend image: ${DOCKER_USER}/apartment-frontend:sha-${DEPLOY_SHA}"
-          } >> "$GITHUB_STEP_SUMMARY"
+          $dockerUser = if ($env:DOCKERHUB_USERNAME) { $env:DOCKERHUB_USERNAME } else { 'pixiz' }
+          @(
+            '## Deploy to Kubernetes Report'
+            '- Status: ${{ job.status }}'
+            '- Trigger: ${{ github.event_name }}'
+            "- Branch: $env:DEPLOY_BRANCH"
+            "- Commit: sha-$env:DEPLOY_SHA"
+            "- Backend image: $dockerUser/apartment-backend:sha-$env:DEPLOY_SHA"
+            "- Frontend image: $dockerUser/apartment-frontend:sha-$env:DEPLOY_SHA"
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
