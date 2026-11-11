@@ -25,6 +25,10 @@
 5. [การทดสอบระบบ End-to-End (Automated E2E ด้วย Playwright & Core Workflow)](#5-การทดสอบระบบ-end-to-end-automated-e2e-ด้วย-playwright--core-workflow)
    - 5.1 [Automated E2E Testing ด้วย Playwright (12 Scenarios)](#51-automated-e2e-testing-ด้วย-playwright-12-scenarios)
    - 5.2 [ขั้นตอนการทดสอบฟังก์ชันทางธุรกิจด้วยตนเอง (Manual E2E Walkthrough)](#52-ขั้นตอนการทดสอบฟังก์ชันทางธุรกิจด้วยตนเอง-manual-e2e-walkthrough)
+6. [ระบบ Observability, Log, Trace, Metric ใน Grafana (Full Stack)](#6-ระบบ-observability-log-trace-metric-ใน-grafana-full-stack)
+   - 6.1 [ภาพรวมสถาปัตยกรรม (Grafana LGTM Stack)](#61-ภาพรวมสถาปัตยกรรม-grafana-lgtm-stack)
+   - 6.2 [การจำแนกประเภท Metric (Monitoring Value vs Business Value)](#62-การจำแนกประเภท-metric-monitoring-value-vs-business-value)
+   - 6.3 [วิธีการเปิดใช้งานและเข้าชมแดชบอร์ด](#63-วิธีการเปิดใช้งานและเข้าชมแดชบอร์ด)
 
 ---
 
@@ -331,3 +335,50 @@
 4. **ระบบงานซ่อมบำรุงและเบิกอุปกรณ์ (Maintenance & Supplies):**
    - ทดสอบสร้างคำขอแจ้งซ่อม (เช่น หลอดไฟเสีย, ล้างแอร์)
    - ตรวจสอบรายการเบิกจ่ายอุปกรณ์ และการตั้งค่าแจ้งเตือนรอบการบำรุงรักษา
+
+---
+
+## 6. ระบบ Observability, Log, Trace, Metric ใน Grafana (Full Stack)
+
+โปรเจกต์ได้รับการติดตั้งระบบ Observability ครบวงจรตามแนวทาง **Observability 101 (Grafana Observability Stack)** โดยรวม 3 เสาหลัก:
+1. **Metrics:** Spring Boot Actuator + Micrometer $\rightarrow$ **Prometheus** (Time Series DB)
+2. **Traces:** OpenTelemetry OTLP Tracer $\rightarrow$ **Grafana Tempo**
+3. **Logs:** Structured Logging (ผูก `traceId` และ `spanId`) $\rightarrow$ **Promtail** $\rightarrow$ **Grafana Loki**
+4. **Single Pane of Glass:** **Grafana** (Dashboards, Datasources และ Correlation เชื่อม Log ไปยัง Trace ได้ในคลิกเดียว)
+
+### 6.1 ภาพรวมสถาปัตยกรรม (Grafana LGTM Stack)
+- รายละเอียดสถาปัตยกรรมและการตั้งค่าเชิงลึกอยู่ในเอกสาร **[OBSERVABILITY_GUIDE.md](OBSERVABILITY_GUIDE.md)**
+
+### 6.2 การจำแนกประเภท Metric (Monitoring Value vs Business Value)
+
+- **Business Value Metrics (คุณค่าในเชิงธุรกิจหอพัก):**
+  - `apartment_rooms_occupancy_rate`: อัตราการเข้าพัก (% Occupancy) - ตัวชี้วัดสำคัญที่สุดของธุรกิจ
+  - `apartment_rooms_occupied`, `apartment_rooms_available`, `apartment_rooms_maintenance`: จำแนกสต็อกห้องพัก
+  - `apartment_bills_total_invoiced` vs `apartment_bills_paid_amount`: ยอดออกบิลรวมเทียบกับเงินสดที่เก็บได้จริง
+  - `apartment_bills_outstanding_amount`: ยอดหนี้ค้างชำระสะสมเพื่อติดตามทวงหนี้
+  - `apartment_maintenance_tasks_active`: งานซ่อมที่ค้างอยู่ และงานซ่อมด่วน (High Priority)
+  - `apartment_maintenance_predictions_total`: จำนวนอุปกรณ์ที่ระบบ AI พยากรณ์พบความเสี่ยงล่วงหน้า
+- **Monitoring Value Metrics (เชิงวิศวกรรมระบบ & SRE):**
+  - `http_server_requests_seconds_count`: ปริมาณ API Requests Per Second (RPS)
+  - `http_server_requests_seconds_max`: API Response Time / Latency (p95, p99)
+  - `http_server_requests_seconds_count{status=~"5.."}`: Error Rate (HTTP 5xx)
+  - `jvm_memory_used_bytes{area="heap"}`: การใช้หน่วยความจำ JVM Heap
+  - `hikaricp_connections_active` / `pending`: สุขภาพ Connection Pool ของ PostgreSQL
+
+### 6.3 วิธีการเปิดใช้งานและเข้าชมแดชบอร์ด
+
+รันชุด Observability พร้อมกับระบบทั้งหมดผ่าน Docker Compose:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+```
+
+หรือกรณีที่รัน Backend แบบ Local อยู่แล้ว:
+```bash
+docker compose -f docker-compose.observability.yml up -d
+```
+
+เข้าชมระบบผ่านเบราว์เซอร์:
+- **Grafana Dashboard:** [http://localhost:3000](http://localhost:3000) (Login: `admin` / `admin`)
+  - เมนู **Dashboards** $\rightarrow$ **Apartment System** $\rightarrow$ **Victory Apartment - Full Observability & Business Value**
+- **Prometheus UI:** [http://localhost:9090](http://localhost:9090)
+- **Backend Prometheus Endpoint:** [http://localhost:8080/actuator/prometheus](http://localhost:8080/actuator/prometheus)

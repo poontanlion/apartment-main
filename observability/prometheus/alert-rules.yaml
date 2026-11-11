@@ -1,0 +1,102 @@
+groups:
+  - name: apartment.monitoring
+    interval: 30s
+    rules:
+
+      # HTTP Error Rate > 5% ใน 2 นาทีที่ผ่านมา
+      - alert: HighHttpErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[2m]))
+          /
+          sum(rate(http_server_requests_seconds_count[2m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "HTTP 5xx Error Rate สูงเกิน 5%"
+          description: "Error rate ปัจจุบัน {{ $value | humanizePercentage }} ตรวจสอบ Logs ใน Loki ทันที"
+
+      # API Latency (Max) สูงเกิน 2 วินาที
+      - alert: HighApiLatency
+        expr: http_server_requests_seconds_max > 2
+        for: 3m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "API Response Time ช้าเกิน 2 วินาที"
+          description: "Endpoint {{ $labels.uri }} มี Latency สูงถึง {{ $value | humanizeDuration }} เปิด Tempo ตรวจสอบ Traces"
+
+      # JVM Heap ใช้งานเกิน 85%
+      - alert: JvmHeapMemoryHigh
+        expr: |
+          jvm_memory_used_bytes{area="heap"}
+          /
+          jvm_memory_max_bytes{area="heap"} > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "JVM Heap Memory ใช้งานเกิน 85%"
+          description: "JVM Heap ใช้งาน {{ $value | humanizePercentage }} อาจเกิด OutOfMemoryError ต้องตรวจสอบ Memory Leak"
+
+      # HikariCP Connection Pool Pending รอ Connection นานเกิน 5
+      - alert: DatabaseConnectionPoolExhausted
+        expr: hikaricp_connections_pending > 5
+        for: 1m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Database Connection Pool เต็ม"
+          description: "มี {{ $value }} threads รอ DB Connection ตรวจสอบ Slow Queries หรือ Connection Leak"
+
+  - name: apartment.business
+    interval: 30s
+    rules:
+
+      # อัตราการเข้าพักต่ำกว่า 60% (ห้องว่างเกินกว่าครึ่ง)
+      - alert: LowRoomOccupancy
+        expr: apartment_rooms_occupancy_rate < 0.60
+        for: 10m
+        labels:
+          severity: warning
+          team: management
+        annotations:
+          summary: "อัตราการเข้าพักต่ำกว่า 60%"
+          description: "Occupancy Rate อยู่ที่ {{ $value | humanizePercentage }} แนะนำให้ฝ่ายการตลาดจัดโปรโมชัน"
+
+      # ยอดหนี้ค้างชำระเกิน 100,000 บาท
+      - alert: HighOutstandingDebt
+        expr: apartment_bills_outstanding_amount > 100000
+        for: 5m
+        labels:
+          severity: warning
+          team: finance
+        annotations:
+          summary: "ยอดหนี้ค้างชำระเกิน 100,000 บาท"
+          description: "ยอดค้างชำระปัจจุบัน {{ $value | humanize }} บาท ฝ่ายบัญชีต้องติดตามทวงหนี้"
+
+      # งานซ่อมด่วน High Priority ค้างเกิน 10 งาน
+      - alert: ManyHighPriorityMaintenanceTasks
+        expr: apartment_maintenance_tasks_high_priority > 10
+        for: 5m
+        labels:
+          severity: critical
+          team: maintenance
+        annotations:
+          summary: "งานซ่อมฉุกเฉิน High Priority ค้างจำนวนมาก"
+          description: "มีงานซ่อมด่วน {{ $value }} งานที่ยังไม่ได้รับการดำเนินการ หัวหน้าช่างต้องกระจายงานด่วน"
+
+      # คำขอจองห้องรอ Approve นานเกิน (> 20 รายการ)
+      - alert: ManyPendingBookings
+        expr: apartment_bookings_pending > 20
+        for: 10m
+        labels:
+          severity: warning
+          team: management
+        annotations:
+          summary: "คำขอจองห้องพักรอ Admin อนุมัติมากเกินไป"
+          description: "มีคำขอจองห้องรอการอนุมัติ {{ $value }} รายการ Admin ควรตรวจสอบและตอบสนองลูกค้า"

@@ -1,0 +1,273 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "🚨 Active Alerts (Business & System)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "green", "index": 0, "text": "OK" }, "1": { "color": "red", "index": 1, "text": "FIRING" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 10,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "targets": [{ "expr": "ALERTS{alertname=\"HighHttpErrorRate\",alertstate=\"firing\"} OR vector(0)", "legendFormat": "HTTP 5xx Alert", "refId": "A" }],
+      "title": "HTTP Error Rate Alert",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "green", "index": 0, "text": "OK" }, "1": { "color": "orange", "index": 1, "text": "FIRING" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "id": 11,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "targets": [{ "expr": "ALERTS{alertname=\"LowRoomOccupancy\",alertstate=\"firing\"} OR vector(0)", "legendFormat": "Low Occupancy Alert", "refId": "A" }],
+      "title": "Low Occupancy Alert",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "green", "index": 0, "text": "OK" }, "1": { "color": "orange", "index": 1, "text": "FIRING" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "id": 12,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "targets": [{ "expr": "ALERTS{alertname=\"HighOutstandingDebt\",alertstate=\"firing\"} OR vector(0)", "legendFormat": "High Debt Alert", "refId": "A" }],
+      "title": "High Outstanding Debt Alert",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "green", "index": 0, "text": "OK" }, "1": { "color": "red", "index": 1, "text": "FIRING" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "id": 13,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "targets": [{ "expr": "ALERTS{alertname=\"ManyHighPriorityMaintenanceTasks\",alertstate=\"firing\"} OR vector(0)", "legendFormat": "Maintenance Alert", "refId": "A" }],
+      "title": "Critical Maintenance Alert",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "green", "index": 0, "text": "OK" }, "1": { "color": "red", "index": 1, "text": "FIRING" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "id": 14,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "targets": [{ "expr": "ALERTS{alertname=\"JvmHeapMemoryHigh\",alertstate=\"firing\"} OR vector(0)", "legendFormat": "JVM Memory Alert", "refId": "A" }],
+      "title": "JVM Memory Alert",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "green", "index": 0, "text": "OK" }, "1": { "color": "red", "index": 1, "text": "FIRING" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "id": 15,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "targets": [{ "expr": "ALERTS{alertname=\"DatabaseConnectionPoolExhausted\",alertstate=\"firing\"} OR vector(0)", "legendFormat": "DB Pool Alert", "refId": "A" }],
+      "title": "DB Connection Pool Alert",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 2,
+      "title": "📈 Business Trends Over Time",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "Occupancy Rate", "axisPlacement": "auto", "fillOpacity": 15, "lineWidth": 2 },
+          "unit": "percentunit"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Target 50%" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }, { "id": "custom.lineStyle", "value": { "dash": [10, 10], "fill": "dash" } }] },
+          { "matcher": { "id": "byName", "options": "Target 80%" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }, { "id": "custom.lineStyle", "value": { "dash": [10, 10], "fill": "dash" } }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 6 },
+      "id": 20,
+      "options": { "legend": { "calcs": ["lastNotNull", "mean"], "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "apartment_rooms_occupancy_rate", "legendFormat": "Current Occupancy Rate", "refId": "A" },
+        { "expr": "vector(0.5)", "legendFormat": "Target 50%", "refId": "B" },
+        { "expr": "vector(0.8)", "legendFormat": "Target 80%", "refId": "C" }
+      ],
+      "title": "Room Occupancy Rate Trend (vs Targets)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "Amount (THB)", "fillOpacity": 15, "lineWidth": 2 },
+          "unit": "currencyTHB"
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 6 },
+      "id": 21,
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "apartment_bills_total_invoiced", "legendFormat": "Total Invoiced", "refId": "A" },
+        { "expr": "apartment_bills_paid_amount", "legendFormat": "Paid Amount", "refId": "B" },
+        { "expr": "apartment_bills_outstanding_amount", "legendFormat": "Outstanding Debt", "refId": "C" }
+      ],
+      "title": "Financial Trend: Revenue vs Cash vs Debt",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisCenteredZero": false, "axisColorMode": "text", "fillOpacity": 15, "lineWidth": 2 },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 6 },
+      "id": 22,
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "apartment_maintenance_tasks_active", "legendFormat": "Active Tasks", "refId": "A" },
+        { "expr": "apartment_maintenance_tasks_high_priority", "legendFormat": "High Priority", "refId": "B" },
+        { "expr": "apartment_bookings_pending", "legendFormat": "Pending Bookings", "refId": "C" }
+      ],
+      "title": "Operations Demand Over Time",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 3,
+      "title": "📊 SRE RED Method (Rate, Errors, Duration)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisCenteredZero": false, "fillOpacity": 10, "lineWidth": 2 },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 15 },
+      "id": 30,
+      "targets": [
+        { "expr": "sum(rate(http_server_requests_seconds_count{uri!~\"/actuator.*\"}[2m])) by (uri, status)", "legendFormat": "{{uri}} [{{status}}]", "refId": "A" }
+      ],
+      "title": "Rate: HTTP RPS per Endpoint & Status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisCenteredZero": false, "fillOpacity": 10, "lineWidth": 2 },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 0.05 }] },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 15 },
+      "id": 31,
+      "targets": [
+        { "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\",uri!~\"/actuator.*\"}[5m])) / sum(rate(http_server_requests_seconds_count{uri!~\"/actuator.*\"}[5m]))", "legendFormat": "5xx Error Rate", "refId": "A" }
+      ],
+      "title": "Errors: HTTP 5xx Error Rate (Threshold = 5%)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisCenteredZero": false, "fillOpacity": 10, "lineWidth": 2 },
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 15 },
+      "id": 32,
+      "targets": [
+        { "expr": "topk(5, histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*\"}[5m])) by (uri, le)))", "legendFormat": "p95 {{uri}}", "refId": "A" }
+      ],
+      "title": "Duration: Top 5 Slowest Endpoints (p95)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["apartment", "alerting", "business-value", "sre"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": { "refresh_intervals": ["5s", "10s", "30s", "1m"] },
+  "timezone": "browser",
+  "title": "Victory Apartment - Alerting & Trends",
+  "uid": "apartment-obs-02",
+  "version": 1
+}
