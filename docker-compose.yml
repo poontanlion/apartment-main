@@ -29,6 +29,7 @@
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@victoryapartment.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4318/v1/traces}
+      LOKI_URL: ${LOKI_URL:-http://loki:3100/loki/api/v1/push}
     ports:
       - "8080:8080"
     expose:

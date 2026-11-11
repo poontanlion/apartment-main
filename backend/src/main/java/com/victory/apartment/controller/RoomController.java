@@ -6,6 +6,9 @@ import com.victory.apartment.repository.RoomRepository;
 import com.victory.apartment.service.ActivityLogService;
 import com.victory.apartment.service.PriceRuleException;
 import com.victory.apartment.service.RoomPriceService;
+import io.micrometer.tracing.annotation.NewSpan;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +23,8 @@ import java.util.UUID;
 @RequestMapping("/api/rooms")
 public class RoomController {
 
+    private static final Logger log = LoggerFactory.getLogger(RoomController.class);
+
     private final RoomRepository repo;
     private final ActivityLogService logService;
     private final RoomPriceService priceService;
@@ -31,7 +36,9 @@ public class RoomController {
     }
 
     @GetMapping
+    @NewSpan("getRoomsControllerSpan")
     public List<Room> getAll(@RequestParam(required = false) String buildingId) {
+        log.info("Fetching rooms with buildingId filter: {}", buildingId);
         if (buildingId != null && !buildingId.isEmpty() && !"All".equalsIgnoreCase(buildingId)) {
             return repo.findByBuildingIdOrderByRoomNumberAsc(buildingId);
         }
@@ -39,7 +46,9 @@ public class RoomController {
     }
 
     @GetMapping("/{id}")
+    @NewSpan("getRoomByIdControllerSpan")
     public ResponseEntity<Room> getById(@PathVariable String id) {
+        log.info("Fetching room by id: {}", id);
         return repo.findById(id)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());

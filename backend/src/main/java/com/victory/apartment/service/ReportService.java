@@ -2,6 +2,9 @@ package com.victory.apartment.service;
 
 import com.victory.apartment.repository.BillReportRow;
 import com.victory.apartment.repository.UtilityBillRepository;
+import io.micrometer.tracing.annotation.NewSpan;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -38,13 +41,17 @@ public class ReportService {
 
     public record Summary(GroupBy groupBy, Totals totals, List<Row> rows, long skippedBills, long duplicateRoomMonths) {}
 
+    private static final Logger log = LoggerFactory.getLogger(ReportService.class);
+
     private final UtilityBillRepository bills;
 
     public ReportService(UtilityBillRepository bills) {
         this.bills = bills;
     }
 
+    @NewSpan("summarizeReportServiceSpan")
     public Summary summarize(Filter filter) {
+        log.info("ReportService summarizing filter: {}", filter);
         Map<String, Group> groups = new LinkedHashMap<>();
         Group overall = new Group("", "");
         Map<String, Integer> billsPerRoomMonth = new HashMap<>();

@@ -4,6 +4,9 @@ import com.victory.apartment.model.Room;
 import com.victory.apartment.model.RoomPrice;
 import com.victory.apartment.repository.RoomPriceRepository;
 import com.victory.apartment.repository.RoomRepository;
+import io.micrometer.tracing.annotation.NewSpan;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +26,8 @@ public class RoomPriceService {
     /** Effective month of a room's first row: its price before any recorded change. */
     private static final LocalDate BASELINE_MONTH = LocalDate.of(2000, 1, 1);
 
+    private static final Logger log = LoggerFactory.getLogger(RoomPriceService.class);
+
     private final RoomPriceRepository prices;
     private final RoomRepository rooms;
     private final ActivityLogService logService;
@@ -39,7 +44,9 @@ public class RoomPriceService {
         return YearMonth.now(clock);
     }
 
+    @NewSpan("calculateRoomPriceServiceSpan")
     public Double priceFor(Room room, YearMonth month) {
+        log.info("Calculating price for room {} for month {}", room.getRoomNumber(), month);
         return prices.findFirstByRoomIdAndEffectiveMonthLessThanEqualOrderByEffectiveMonthDesc(room.getId(), month.atDay(1))
                 .map(RoomPrice::getPrice)
                 .orElse(room.getPrice());

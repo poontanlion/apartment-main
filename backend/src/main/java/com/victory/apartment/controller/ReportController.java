@@ -5,6 +5,9 @@ import com.victory.apartment.service.ReportService;
 import com.victory.apartment.service.ReportService.Filter;
 import com.victory.apartment.service.ReportService.GroupBy;
 import com.victory.apartment.service.ReportService.Summary;
+import io.micrometer.tracing.annotation.NewSpan;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +22,8 @@ import java.util.Set;
 @RequestMapping("/api/reports")
 public class ReportController {
 
+    private static final Logger log = LoggerFactory.getLogger(ReportController.class);
+
     private static final Set<String> STATUSES = Set.of("All", "Paid", "Unpaid");
 
     private final ReportService reports;
@@ -28,12 +33,14 @@ public class ReportController {
     }
 
     @GetMapping("/summary")
+    @NewSpan("getReportSummaryControllerSpan")
     public Summary summary(@RequestParam(required = false) String groupBy,
                            @RequestParam(required = false) String from,
                            @RequestParam(required = false) String to,
                            @RequestParam(required = false) String buildingId,
                            @RequestParam(required = false) String status,
                            @RequestParam(required = false) String search) {
+        log.info("Generating report summary groupBy={}, from={}, to={}", groupBy, from, to);
         GroupBy grouping = parseGroupBy(groupBy);
         YearMonth fromMonth = parseMonth(from);
         YearMonth toMonth = parseMonth(to);
