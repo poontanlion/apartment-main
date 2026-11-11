@@ -91,57 +91,11 @@
 
 ---
 
-## 3. แดชบอร์ดสำเร็จรูปใน Grafana
-
-เมื่อเข้าสู่ Grafana ([http://localhost:3000](http://localhost:3000)) เมนู **Dashboards** $\rightarrow$ โฟลเดอร์ **Apartment System**:
-
-### 3.1 แดชบอร์ดที่ 1: `Victory Apartment - Full Observability & Business Value` (apartment-obs-01)
-แดชบอร์ดหลักที่รวมภาพรวมครบทุกมิติ:
-1. **Row 1 - Business Value KPIs:**
-   - เกจวัดอัตราเข้าพัก (% Occupancy) พร้อม Color Thresholds (เขียว $\ge 80\%$, ส้ม $60-80\%$, แดง $< 60\%$)
-   - แผนภูมิสถานะห้องพัก (Occupied, Available, Maintenance)
-   - สรุปตัวเลขทางการเงิน: ยอดเรียกเก็บรวม vs เงินสดที่รับชำระ และยอดหนี้ค้างชำระ
-   - ภาระงานซ่อมบำรุงและรายการจองห้องรออนุมัติ
-2. **Row 2 - System Health & RED Metrics:**
-   - กราฟ HTTP Throughput (RPS)
-   - กราฟ API Latency
-   - การใช้งาน JVM Heap Memory
-3. **Row 3 - Real-time Log Stream:**
-   - บรรทัด Log สดจากแอปพลิเคชัน พร้อมปุ่มกดข้ามไปยังหน้า Distributed Traces
-
-### 3.2 แดชบอร์ดที่ 2: `Victory Apartment - Alerting & Trends` (apartment-obs-02)
-แดชบอร์ดสำหรับฝ่ายบริหารและทีม SRE:
-1. **Active Alerts Status:** ตรวจจับสถานะการเตือนภัย 6 จุด (System & Business) แสดงสถานะ OK หรือ FIRING
-2. **Business Trends Over Time:** แนวโน้มอัตราการเข้าพักเทียบเป้าหมาย (Targets 50% และ 80%), แนวโน้มกระแสเงินสดเทียบยอดหนี้ค้างสะสม
-3. **SRE RED Method Analysis:** HTTP Rate ต่อ Endpoint, 5xx Error Rate Threshold (5%), และ Top 5 Slowest Endpoints (p95)
-
----
-
-## 4. การสืบค้น Distributed Tracing และ Logs Correlation
-
-### 4.1 Multi-layer Distributed Tracing ใน Tempo
-ระบบได้แบ่ง Span ออกเป็นระดับชั้น เพื่อให้เห็นว่าคำขอหนึ่งๆ ใช้เวลาไปกับส่วนใดบ้าง:
-1. ไปที่ Grafana $\rightarrow$ เมนู **Explore** $\rightarrow$ เลือก Datasource **Tempo**
-2. เลือก Query Type: **Search** $\rightarrow$ เลือก Service Name: `apartment-backend` แล้วกด Run query
-3. เมื่อเลือก Trace ID จะเห็น **Waterfall Trace Tree** เช่น:
-   ```text
-   Trace ID: 6fe6904853cb68a63da5b460c5eb0bf6
-   ├── [Root Span]   http get /api/reports/summary (HTTP Server Span)
-   │   └── [Child 1]  get-report-summary-controller-span (Controller Layer)
-   │       └── [Child 2]  summarize-report-service-span (Service Layer)
-   ```
-
-### 4.2 การเชื่อมโยง Trace และ Log (Bi-directional Correlation)
-- **จาก Trace ไป Log:** ในหน้า Tempo Trace ให้คลิกที่ Span หรือปุ่ม **Trace to logs** ระบบจะดึง Log lines ทั้งหมดที่มี `traceId` นั้นจาก Loki มาแสดงทันที
-- **จาก Log ไป Trace:** ในหน้า Loki เมื่อค้นหา Log จะพบบรรทัด Log พร้อมปุ่มสีฟ้า **TraceID** คลิกครั้งเดียวเพื่อกระโดดไปดู Waterfall Span ใน Tempo
-
----
-
-## 5. กฎการแจ้งเตือน (Alerting Rules)
+## 3. กฎการแจ้งเตือน (Alerting Rules)
 
 กำหนดไว้ในไฟล์ [`observability/prometheus/alert-rules.yaml`](observability/prometheus/alert-rules.yaml) แบ่งออกเป็น 2 กลุ่ม:
 
-### 5.1 Monitoring Alerts (เชิงวิศวกรรมระบบ)
+### 3.1 Monitoring Alerts (เชิงวิศวกรรมระบบ)
 | Alert Name | เงื่อนไขการแจ้งเตือน | Severity | ผู้รับผิดชอบ |
 |---|---|---|---|
 | `HighHttpErrorRate` | HTTP 5xx Error Rate > 5% ต่อเนื่อง 2 นาที | 🔴 Critical | Backend Team |
@@ -149,7 +103,7 @@
 | `JvmHeapMemoryHigh` | JVM Heap ใช้งานเกิน 85% ต่อเนื่อง 5 นาที | ⚠️ Warning | Platform Team |
 | `DatabaseConnectionPoolExhausted` | HikariCP Pending Connections > 5 ต่อเนื่อง 1 นาที | 🔴 Critical | Backend Team |
 
-### 5.2 Business Alerts (เชิงธุรกิจ)
+### 3.2 Business Alerts (เชิงธุรกิจ)
 | Alert Name | เงื่อนไขการแจ้งเตือน | Severity | ผู้รับผิดชอบ |
 |---|---|---|---|
 | `LowRoomOccupancy` | อัตราเข้าพักห้อง < 60% ต่อเนื่อง 10 นาที | ⚠️ Warning | Management |
@@ -159,7 +113,7 @@
 
 ---
 
-## 6. พอร์ตและ URL สำหรับเข้าใช้งานระบบ
+## 4. พอร์ตและ URL สำหรับเข้าใช้งานระบบ
 
 | Service | URL | สิทธิ์ / บัญชี | วัตถุประสงค์ |
 |---|---|---|---|
@@ -171,7 +125,7 @@
 
 ---
 
-## 7. คำสั่งเปิดใช้งาน (How to Run)
+## 5. คำสั่งเปิดใช้งาน (How to Run)
 
 ```powershell
 # รันระบบทั้งหมดพร้อมชุด Observability
