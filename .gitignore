@@ -105,3 +105,6 @@ frontend/test-results/
 *.trace.db
 backend/data/
 data/
+
+# Temporary patch files
+*.patch
