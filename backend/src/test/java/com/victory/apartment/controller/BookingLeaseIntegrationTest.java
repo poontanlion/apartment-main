@@ -308,6 +308,61 @@ class BookingLeaseIntegrationTest {
         return leases.save(lease);
     }
 
+    private Map<String, Object> leaseBody(String terminatedDate) {
+        Map<String, Object> body = new java.util.HashMap<>(Map.of(
+                "tenantId", "t-walk-in", "tenantName", "Walk-in", "roomId", room.getId(), "roomNumber", room.getRoomNumber(),
+                "checkInDate", "2027-12-01", "checkOutDate", "2028-06-01", "rentAmount", 5000, "status", "Terminated"));
+        body.put("terminatedDate", terminatedDate);
+        return body;
+    }
+
+    private Lease terminatedLease() throws Exception {
+        Lease lease = activeLease("Leaving", LocalDate.of(2027, 12, 1), LocalDate.of(2028, 6, 1));
+        mvc.perform(put("/api/leases/" + lease.getId() + "/terminate")).andExpect(status().isOk());
+        return leases.findById(lease.getId()).orElseThrow();
+    }
+
+    @Test
+    void savingLeaseKeepsRoomPrice() throws Exception {
+        Map<String, Object> body = new java.util.HashMap<>(leaseBody(null));
+        body.put("status", "Active");
+
+        mvc.perform(post("/api/leases").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
+                .andExpect(status().isOk());
+
+        assertThat(rooms.findById(room.getId()).orElseThrow().getPrice()).isEqualTo(6000.0);
+    }
+
+    @Test
+    void terminatingLeaseRecordsDate() throws Exception {
+        assertThat(terminatedLease().getTerminatedDate()).isEqualTo(LocalDate.now(java.time.ZoneId.of("Asia/Bangkok")));
+    }
+
+    @Test
+    void updatingLeaseKeepsTerminatedDate() throws Exception {
+        Lease lease = terminatedLease();
+        LocalDate recorded = lease.getTerminatedDate();
+
+        for (String sent : new String[] {null, "2020-01-01"}) {
+            mvc.perform(put("/api/leases/" + lease.getId()).contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(leaseBody(sent))))
+                    .andExpect(status().isOk());
+            assertThat(leases.findById(lease.getId()).orElseThrow().getTerminatedDate()).isEqualTo(recorded);
+        }
+    }
+
+    @Test
+    void creatingLeaseIgnoresClientTerminatedDate() throws Exception {
+        Map<String, Object> body = new java.util.HashMap<>(leaseBody("2020-01-01"));
+        body.put("status", "Active");
+
+        MvcResult result = mvc.perform(post("/api/leases").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
+                .andExpect(status().isOk()).andReturn();
+
+        String id = json.readTree(result.getResponse().getContentAsString()).path("lease").path("id").asText();
+        assertThat(leases.findById(id).orElseThrow().getTerminatedDate()).isNull();
+    }
+
     @Test
     void terminatingLeaseHandsRoomToAnotherActiveLeaseCoveringToday() throws Exception {
         LocalDate today = LocalDate.now();

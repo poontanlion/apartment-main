@@ -35,6 +35,8 @@ import { ActivityLogList } from './pages/admin/ActivityLogList';
 import { NotificationCenter } from './pages/admin/NotificationCenter';
 import { TenantManagement } from './pages/admin/TenantManagement';
 import { BookingManagement } from './pages/admin/BookingManagement';
+import { DocumentRepository } from './pages/admin/DocumentRepository';
+import { SummaryReports } from './pages/admin/SummaryReports';
 
 // Protected Admin Route Guard
 const ProtectedAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -137,7 +139,9 @@ export const AppContent: React.FC = () => {
         <Route path="/admin/tenants" element={<ProtectedAdminRoute><AdminLayout><TenantManagement /></AdminLayout></ProtectedAdminRoute>} />
         <Route path="/admin/bookings" element={<ProtectedAdminRoute><AdminLayout><BookingManagement /></AdminLayout></ProtectedAdminRoute>} />
         <Route path="/admin/utility-bills" element={<ProtectedAdminRoute><AdminLayout><UtilityReceiptManagement /></AdminLayout></ProtectedAdminRoute>} />
+        <Route path="/admin/reports" element={<ProtectedAdminRoute><AdminLayout><SummaryReports /></AdminLayout></ProtectedAdminRoute>} />
         <Route path="/admin/maintenance" element={<ProtectedAdminRoute><AdminLayout><MaintenanceManagement /></AdminLayout></ProtectedAdminRoute>} />
+        <Route path="/admin/documents" element={<ProtectedAdminRoute><AdminLayout><DocumentRepository /></AdminLayout></ProtectedAdminRoute>} />
         <Route path="/admin/activity-log" element={<ProtectedAdminRoute><AdminLayout><ActivityLogList /></AdminLayout></ProtectedAdminRoute>} />
         <Route path="/admin/notifications" element={<ProtectedAdminRoute><AdminLayout><NotificationCenter /></AdminLayout></ProtectedAdminRoute>} />
 

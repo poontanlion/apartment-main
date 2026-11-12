@@ -3,8 +3,11 @@ package com.victory.apartment.controller;
 import com.victory.apartment.model.*;
 import com.victory.apartment.repository.*;
 import com.victory.apartment.service.ActivityLogService;
+import com.victory.apartment.service.maintenancepredictor.MaintenancePredictionTrigger;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,6 +26,7 @@ public class MaintenanceController {
     private final AppNotificationRepository notifRepo;
     private final RoomRepository roomRepo;
     private final ActivityLogService activityLogService;
+    private final MaintenancePredictionTrigger predictionTrigger;
 
     public MaintenanceController(
             MaintenanceTaskRepository taskRepo,
@@ -31,7 +35,8 @@ public class MaintenanceController {
             ScheduledReminderRepository reminderRepo,
             AppNotificationRepository notifRepo,
             RoomRepository roomRepo,
-            ActivityLogService activityLogService) {
+            ActivityLogService activityLogService,
+            MaintenancePredictionTrigger predictionTrigger) {
         this.taskRepo = taskRepo;
         this.supplyRepo = supplyRepo;
         this.logRepo = logRepo;
@@ -39,6 +44,7 @@ public class MaintenanceController {
         this.notifRepo = notifRepo;
         this.roomRepo = roomRepo;
         this.activityLogService = activityLogService;
+        this.predictionTrigger = predictionTrigger;
     }
 
     // === MAINTENANCE TASKS ===
@@ -72,6 +78,8 @@ public class MaintenanceController {
 
     @PostMapping("/maintenance-tasks")
     public MaintenanceTask createTask(@RequestBody MaintenanceTask task) {
+        boolean newlyCompleted = "Completed".equals(task.getStatus()) && (task.getId() == null
+                || taskRepo.findById(task.getId()).map(old -> !"Completed".equals(old.getStatus())).orElse(true));
         if (task.getId() == null || task.getId().isEmpty()) {
             task.setId("mt-" + UUID.randomUUID().toString().substring(0, 8));
             task.setTaskNo(String.format("MNT-%tY%tm-%s", LocalDateTime.now(), LocalDateTime.now(), UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase()));
@@ -88,9 +96,10 @@ public class MaintenanceController {
         }
 
         MaintenanceTask saved = taskRepo.save(task);
+        recalculateAndDeductSuppliesStock();
 
         // Always sync/add to maintenance log so per-unit history is always up to date!
-        syncOrAddMaintenanceLogFromTask(saved);
+        syncOrAddMaintenanceLogFromTask(saved, newlyCompleted, true);
 
         // Auto-create notification for Admin
         AppNotification notif = new AppNotification();
@@ -114,6 +123,7 @@ public class MaintenanceController {
     @PutMapping("/maintenance-tasks/{id}")
     public ResponseEntity<MaintenanceTask> updateTask(@PathVariable String id, @RequestBody MaintenanceTask incoming) {
         return taskRepo.findById(id).map(existing -> {
+            boolean newlyCompleted = !"Completed".equals(existing.getStatus()) && "Completed".equals(incoming.getStatus());
             if (incoming.getStatus() != null) existing.setStatus(incoming.getStatus());
             if (incoming.getCategory() != null) existing.setCategory(incoming.getCategory());
             if (incoming.getDescription() != null) existing.setDescription(incoming.getDescription());
@@ -124,17 +134,20 @@ public class MaintenanceController {
             if (incoming.getSuppliesUsed() != null) existing.setSuppliesUsed(incoming.getSuppliesUsed());
             if (incoming.getOccupancyType() != null) existing.setOccupancyType(incoming.getOccupancyType());
             if (incoming.getArchived() != null) existing.setArchived(incoming.getArchived());
+            if (incoming.getScannedDocument() != null) existing.setScannedDocument(incoming.getScannedDocument());
 
             if ("Completed".equals(existing.getStatus()) && existing.getCompletedAt() == null) {
                 existing.setCompletedAt(LocalDateTime.now());
             }
 
             // Always sync/update maintenance log
-            syncOrAddMaintenanceLogFromTask(existing);
+            MaintenanceTask saved = taskRepo.save(existing);
+            syncOrAddMaintenanceLogFromTask(saved, newlyCompleted, true);
 
             activityLogService.log("Maintenance Task Updated",
                 String.format("Task %s for Unit %s set to %s", existing.getTaskNo(), existing.getRoomNumber(), existing.getStatus()));
-            return ResponseEntity.ok(taskRepo.save(existing));
+            recalculateAndDeductSuppliesStock();
+            return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -146,12 +159,17 @@ public class MaintenanceController {
                 logRepo.deleteAll(linkedLogs);
             }
             taskRepo.deleteById(id);
+            recalculateAndDeductSuppliesStock();
             activityLogService.log("Maintenance Task Deleted", "Task " + id + " was removed");
             return ResponseEntity.noContent().<Void>build();
         }).orElse(ResponseEntity.notFound().build());
     }
 
     private void syncOrAddMaintenanceLogFromTask(MaintenanceTask task) {
+        syncOrAddMaintenanceLogFromTask(task, false, false);
+    }
+
+    private void syncOrAddMaintenanceLogFromTask(MaintenanceTask task, boolean newlyCompleted, boolean trigger) {
         List<MaintenanceLog> existingLogs = logRepo.findByTaskNo(task.getTaskNo());
         MaintenanceLog log;
         if (!existingLogs.isEmpty()) {
@@ -162,6 +180,8 @@ public class MaintenanceController {
             log.setDate(task.getCreatedAt() != null ? task.getCreatedAt().toLocalDate().toString() : java.time.LocalDate.now().toString());
             log.setTaskNo(task.getTaskNo());
         }
+        String oldRoomId = log.getRoomId();
+        String oldTaskTypeId = log.getTaskTypeId();
         log.setRoomId(task.getRoomId());
         log.setRoomNumber(task.getRoomNumber());
         log.setCategory(task.getCategory());
@@ -169,7 +189,16 @@ public class MaintenanceController {
         log.setSuppliesSummary(task.getSuppliesUsed() != null && !task.getSuppliesUsed().isEmpty() ? task.getSuppliesUsed() : "ไม่มีอะไหล่ (ค่าแรงอย่างเดียว)");
         log.setTotalCost(task.getTotalCost() != null ? task.getTotalCost() : (task.getLaborCost() != null ? task.getLaborCost() : 0.0));
         log.setPerformedBy(task.getAssignedWorker() != null && !task.getAssignedWorker().isEmpty() ? task.getAssignedWorker() : "ช่างประจำอาคาร");
+        if (task.getScannedDocument() != null) log.setScannedDocument(task.getScannedDocument());
+        predictionTrigger.prepare(log, task, newlyCompleted);
         logRepo.save(log);
+        if (trigger) {
+            if (newlyCompleted) predictionTrigger.completeSafely(log);
+            else predictionTrigger.recalculateSafely(log.getRoomId(), log.getTaskTypeId());
+            if (!java.util.Objects.equals(oldRoomId, log.getRoomId())
+                    || !java.util.Objects.equals(oldTaskTypeId, log.getTaskTypeId()))
+                predictionTrigger.recalculateSafely(oldRoomId, oldTaskTypeId);
+        }
     }
 
     // === SUPPLIES ===
@@ -181,12 +210,16 @@ public class MaintenanceController {
 
     @PostMapping("/supplies")
     public SupplyItem createSupply(@RequestBody SupplyItem supply) {
+        validateSupplyStock(supply);
         if (supply.getId() == null || supply.getId().isEmpty()) {
             supply.setId("sup-" + UUID.randomUUID().toString().substring(0, 8));
         }
         if (supply.getBaseStockQuantity() == null && supply.getStockQuantity() != null) {
             supply.setBaseStockQuantity(supply.getStockQuantity());
         }
+        if (supply.getLowStockThreshold() == null) supply.setLowStockThreshold(2);
+        // Alert state is derived from stock and threshold; clients cannot suppress a first alert.
+        supply.setLowStockAlertActive(false);
         SupplyItem saved = supplyRepo.save(supply);
         recalculateAndDeductSuppliesStock();
         return supplyRepo.findById(saved.getId()).orElse(saved);
@@ -194,11 +227,13 @@ public class MaintenanceController {
 
     @PutMapping("/supplies/{id}")
     public ResponseEntity<SupplyItem> updateSupply(@PathVariable String id, @RequestBody SupplyItem incoming) {
+        validateSupplyStock(incoming);
         return supplyRepo.findById(id).map(existing -> {
             if (incoming.getName() != null) existing.setName(incoming.getName());
             if (incoming.getCategory() != null) existing.setCategory(incoming.getCategory());
             if (incoming.getUnitCost() != null) existing.setUnitCost(incoming.getUnitCost());
             if (incoming.getUnitName() != null) existing.setUnitName(incoming.getUnitName());
+            if (incoming.getLowStockThreshold() != null) existing.setLowStockThreshold(incoming.getLowStockThreshold());
 
             // If manual adjustment of stockQuantity (like +1 or -1 buttons)
             if (incoming.getStockQuantity() != null) {
@@ -210,6 +245,18 @@ public class MaintenanceController {
             recalculateAndDeductSuppliesStock();
             return ResponseEntity.ok(supplyRepo.findById(id).orElse(existing));
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    private void validateSupplyStock(SupplyItem supply) {
+        if (supply.getLowStockThreshold() != null && supply.getLowStockThreshold() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Low-stock threshold must be zero or greater.");
+        }
+        if (supply.getStockQuantity() != null && supply.getStockQuantity() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stock quantity must be zero or greater.");
+        }
+        if (supply.getBaseStockQuantity() != null && supply.getBaseStockQuantity() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Base stock quantity must be zero or greater.");
+        }
     }
 
     // Dynamic helper methods for parsing and stock deduction
@@ -255,9 +302,9 @@ public class MaintenanceController {
 
     private boolean supplyNameMatches(String supplyName, String usedName) {
         if (supplyName == null || usedName == null) return false;
-        String s1 = supplyName.toLowerCase().replaceAll("[^a-z0-9]", "");
-        String s2 = usedName.toLowerCase().replaceAll("[^a-z0-9]", "");
-        return s1.contains(s2) || s2.contains(s1) ||
+        String s1 = supplyName.toLowerCase().replaceAll("[^\\p{L}\\p{N}]", "");
+        String s2 = usedName.toLowerCase().replaceAll("[^\\p{L}\\p{N}]", "");
+        return !s1.isEmpty() && s1.equals(s2) ||
                (s1.contains("ledbulb") && s2.contains("ledbulb")) ||
                (s1.contains("airconfilter") && s2.contains("airconfilter")) ||
                (s1.contains("basinsink") && s2.contains("basinsink")) ||
@@ -272,6 +319,7 @@ public class MaintenanceController {
         int total = 0;
 
         for (MaintenanceTask t : allTasks) {
+            if (!"Completed".equalsIgnoreCase(t.getStatus())) continue;
             Map<String, Integer> parsed = parseSuppliesUsed(t.getSuppliesUsed());
             for (Map.Entry<String, Integer> entry : parsed.entrySet()) {
                 if (supplyNameMatches(supplyName, entry.getKey())) {
@@ -301,6 +349,7 @@ public class MaintenanceController {
         Map<String, Integer> totalUsedMap = new HashMap<>();
 
         for (MaintenanceTask t : allTasks) {
+            if (!"Completed".equalsIgnoreCase(t.getStatus())) continue;
             Map<String, Integer> parsed = parseSuppliesUsed(t.getSuppliesUsed());
             parsed.forEach((k, v) -> totalUsedMap.put(k, totalUsedMap.getOrDefault(k, 0) + v));
         }
@@ -326,6 +375,21 @@ public class MaintenanceController {
             }
             int remainingStock = Math.max(0, base - totalUsed);
             item.setStockQuantity(remainingStock);
+            int threshold = item.getLowStockThreshold() != null ? item.getLowStockThreshold() : 2;
+            boolean isLow = remainingStock <= threshold;
+            if (isLow && !Boolean.TRUE.equals(item.getLowStockAlertActive())) {
+                AppNotification notif = new AppNotification();
+                notif.setId("notif-" + UUID.randomUUID().toString().substring(0, 8));
+                notif.setTitle("ใกล้หมด / Low inventory: " + item.getName());
+                notif.setMessage(String.format("%s เหลือ %d %s (แจ้งเตือนเมื่อเหลือไม่เกิน %d) / %d %s remaining (threshold %d).", item.getName(), remainingStock,
+                    item.getUnitName() != null ? item.getUnitName() : "ชิ้น", threshold, remainingStock,
+                    item.getUnitName() != null ? item.getUnitName() : "units", threshold));
+                notif.setType("inventory");
+                notif.setIsRead(false);
+                notif.setCreatedAt(LocalDateTime.now());
+                notifRepo.save(notif);
+            }
+            item.setLowStockAlertActive(isLow);
             supplyRepo.save(item);
         }
     }
@@ -371,10 +435,18 @@ public class MaintenanceController {
 
     @PostMapping("/maintenance-logs")
     public MaintenanceLog createLog(@RequestBody MaintenanceLog log) {
+        MaintenanceLog old = log.getId() == null ? null : logRepo.findById(log.getId()).orElse(null);
         if (log.getId() == null || log.getId().isEmpty()) {
             log.setId("log-" + UUID.randomUUID().toString().substring(0, 8));
         }
+        // Ignore client-supplied derived metadata; resolve it from category/task/date.
+        log.setCompletedDate(old == null ? null : old.getCompletedDate());
+        prepareLog(log);
         MaintenanceLog saved = logRepo.save(log);
+        predictionTrigger.recalculateSafely(saved.getRoomId(), saved.getTaskTypeId());
+        if (old != null && (!java.util.Objects.equals(old.getRoomId(), saved.getRoomId())
+                || !java.util.Objects.equals(old.getTaskTypeId(), saved.getTaskTypeId())))
+            predictionTrigger.recalculateSafely(old.getRoomId(), old.getTaskTypeId());
         recalculateAndDeductSuppliesStock();
         return saved;
     }
@@ -382,14 +454,26 @@ public class MaintenanceController {
     @PutMapping("/maintenance-logs/{id}")
     public ResponseEntity<MaintenanceLog> updateLog(@PathVariable String id, @RequestBody MaintenanceLog incoming) {
         return logRepo.findById(id).map(existing -> {
+            String oldTaskTypeId = existing.getTaskTypeId();
             if (incoming.getDescription() != null) existing.setDescription(incoming.getDescription());
             if (incoming.getSuppliesSummary() != null) existing.setSuppliesSummary(incoming.getSuppliesSummary());
             if (incoming.getTotalCost() != null) existing.setTotalCost(incoming.getTotalCost());
             if (incoming.getPerformedBy() != null) existing.setPerformedBy(incoming.getPerformedBy());
+            if (incoming.getScannedDocument() != null) existing.setScannedDocument(incoming.getScannedDocument());
+            prepareLog(existing);
             MaintenanceLog saved = logRepo.save(existing);
+            predictionTrigger.recalculateSafely(saved.getRoomId(), saved.getTaskTypeId());
+            if (!java.util.Objects.equals(oldTaskTypeId, saved.getTaskTypeId()))
+                predictionTrigger.recalculateSafely(saved.getRoomId(), oldTaskTypeId);
             recalculateAndDeductSuppliesStock();
             return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    private void prepareLog(MaintenanceLog log) {
+        MaintenanceTask task = log.getTaskNo() == null || log.getTaskNo().isBlank() ? null
+                : taskRepo.findByTaskNo(log.getTaskNo()).orElse(null);
+        predictionTrigger.prepare(log, task, false);
     }
 
     @DeleteMapping("/maintenance-logs/{id}")

@@ -3,12 +3,15 @@ import { X } from 'lucide-react';
 import { Room, RoomType, RoomStatus, Building } from '../../types';
 import { getBuildings } from '../../services/api';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatCurrency } from '../../utils/formatters';
+import { RoomPricePanel } from './RoomPricePanel';
 
 interface RoomModalProps {
   room?: Room | null;
   isOpen: boolean;
   onClose: () => void;
   onSave: (roomData: Partial<Room>) => void;
+  onPriceChanged?: () => void;
   defaultBuildingId?: string;
 }
 
@@ -17,7 +20,7 @@ const ALL_AMENITIES = [
   'Keycard Access', 'Refrigerator', 'Parking', 'CCTV'
 ];
 
-export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onSave, defaultBuildingId }) => {
+export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onSave, onPriceChanged, defaultBuildingId }) => {
   const { t, language } = useLanguage();
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string>(room?.buildingId || defaultBuildingId || '');
@@ -30,6 +33,8 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
   const [bedType, setBedType] = useState(room?.bedType || 'King Bed');
   const [status, setStatus] = useState<RoomStatus>(room?.status || 'Available');
   const [description, setDescription] = useState(room?.description || '');
+  const [extraChargeLabel, setExtraChargeLabel] = useState(room?.extraChargeLabel || '');
+  const [extraChargeAmount, setExtraChargeAmount] = useState<number | ''>(room?.extraChargeAmount || '');
   const [coverImage, setCoverImage] = useState(room?.coverImage || 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80');
 
   useEffect(() => {
@@ -78,7 +83,8 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
       roomType,
       buildingId: selectedBuildingId,
       buildingName: bld?.name || bld?.code || 'A',
-      price: Number(price),
+      // An existing room's price only changes through its price history.
+      ...(room ? {} : { price: Number(price) }),
       capacity: Number(capacity),
       sizeSqm: Number(sizeSqm),
       bedType,
@@ -86,6 +92,9 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
       description,
       amenities: JSON.stringify(amenities),
       coverImage,
+      // 0 clears the charge (the API only applies fields that are sent).
+      extraChargeAmount: Number(extraChargeAmount) || 0,
+      extraChargeLabel: Number(extraChargeAmount) > 0 ? extraChargeLabel.trim() : '',
     });
     onClose();
   };
@@ -180,10 +189,14 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block font-medium mb-1.5 text-nike-ink dark:text-white">
+              <label htmlFor="room-rent" className="block font-medium mb-1.5 text-nike-ink dark:text-white">
                 {language === 'th' ? 'ค่าเช่ารายเดือน (บาท)' : 'Monthly Rent (THB)'}
               </label>
-              <input type="number" required min="0" value={price} onChange={e => setPrice(Number(e.target.value))} className={inputClass} />
+              {room ? (
+                <input id="room-rent" type="text" readOnly value={formatCurrency(price)} className={inputClass + " cursor-not-allowed font-semibold"} />
+              ) : (
+                <input id="room-rent" type="number" required min="1" value={price} onChange={e => setPrice(Number(e.target.value))} className={inputClass} />
+              )}
             </div>
             <div>
               <label className="block font-medium mb-1.5 text-nike-ink dark:text-white">
@@ -196,6 +209,40 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
                 {language === 'th' ? 'ขนาด (ตร.ม.)' : 'Size (sqm)'}
               </label>
               <input type="number" required min="1" value={sizeSqm} onChange={e => setSizeSqm(Number(e.target.value))} className={inputClass} />
+            </div>
+          </div>
+
+          <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="room-extra-label" className="block font-medium mb-1.5 text-nike-ink dark:text-white">
+                  {language === 'th' ? 'ค่าใช้จ่ายเสริม - ชื่อรายการ (ไม่บังคับ)' : 'Extra charge name (optional)'}
+                </label>
+                <input
+                  id="room-extra-label"
+                  type="text"
+                  maxLength={100}
+                  value={extraChargeLabel}
+                  onChange={e => setExtraChargeLabel(e.target.value)}
+                  placeholder={language === 'th' ? 'เช่น ค่าที่จอดรถ, ค่าอินเทอร์เน็ต' : 'e.g. Parking, Internet'}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="room-extra-amount" className="block font-medium mb-1.5 text-nike-ink dark:text-white">
+                  {language === 'th' ? 'ค่าใช้จ่ายเสริมต่อเดือน (บาท)' : 'Extra charge per month (THB)'}
+                </label>
+                <input
+                  id="room-extra-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={extraChargeAmount}
+                  onChange={e => setExtraChargeAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="0"
+                  className={inputClass}
+                />
+              </div>
             </div>
           </div>
 
@@ -244,6 +291,16 @@ export const RoomModal: React.FC<RoomModalProps> = ({ room, isOpen, onClose, onS
           </div>
 
         </form>
+
+        {room && (
+          <RoomPricePanel
+            room={room}
+            onChanged={currentPrice => {
+              setPrice(currentPrice);
+              onPriceChanged?.();
+            }}
+          />
+        )}
 
       </div>
     </div>

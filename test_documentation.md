@@ -33,8 +33,9 @@ Unit Test ของ Spring Boot ในโปรเจกต์นี้ใช้
 | `GeneralController` | `GeneralControllerTest` | 8 |
 | `LeaseController` | `LeaseControllerTest` | 6 |
 | `Actuator (Health)` | `ActuatorHealthTest` | 3 |
+| `Business Metrics (Observability)` | `BusinessMetricsCollectorTest` | 3 |
 
-**รวมทั้งหมด: 72 Test Methods ครอบคลุม Controllers และ Health Check**
+**รวมทั้งหมด: 75 Test Methods ครอบคลุม Controllers, Health Check และ Observability Business Metrics**
 
 ---
 
@@ -47,6 +48,10 @@ Unit Test ของ Spring Boot ในโปรเจกต์นี้ใช้
 - **MaintenanceControllerTest**: ครอบคลุม Tasks, Supplies, Logs, Reminders รวม 14 เคส
 - **LeaseControllerTest**: ทดสอบการจองสัญญา, เช็ค Conflict และยกเลิกสัญญา (Terminate)
 - **ActuatorHealthTest**: ตรวจสอบสถานะความพร้อมของระบบ (Liveness, Readiness Probes) และสถานะการเชื่อมต่อ Database ผ่าน Spring Boot Actuator
+- **BusinessMetricsCollectorTest**: ทดสอบ Business Value Metrics Collector สำหรับระบบ Observability ครอบคลุม 3 กรณี:
+  - `testRoomMetricsCalculation`: ตรวจสอบความถูกต้องของ Gauge ด้านห้องพัก (Occupancy Rate, จำนวนห้องว่าง/เต็ม/ซ่อม)
+  - `testFinancialMetricsCalculation`: ตรวจสอบความถูกต้องของ Gauge ด้านการเงิน (ยอดหนี้ค้างชำระ, เงินสดที่เก็บได้, ยอดออกบิล)
+  - `testOperationsAndDemandMetrics`: ตรวจสอบ Gauge ด้านปฏิบัติการ (งานซ่อม Active, High Priority, คำขอจองห้องรอ Approve)
 
 ---
 

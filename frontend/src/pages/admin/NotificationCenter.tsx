@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell, CheckCheck, FileText, Wrench, Clock, CheckCircle2,
-  ArrowUpRight, Check, Trash2
+  ArrowUpRight, Check, Trash2, Package
 } from 'lucide-react';
 import { AppNotification } from '../../types';
 import { getNotifications, markNotificationsRead, markNotificationAsRead, deleteNotification } from '../../services/api';
@@ -19,6 +19,10 @@ const removeEmojis = (text: string): string => {
 
 export const getNotificationTargetUrl = (title: string, message?: string, type?: string): string => {
   const text = `${title} ${message || ''}`.toLowerCase();
+  if (text.includes('/admin/maintenance?tab=predictions')) return '/admin/maintenance?tab=predictions';
+  if (type === 'inventory' || text.includes('low inventory') || text.includes('low stock') || text.includes('ใกล้หมด')) {
+    return '/admin/maintenance?tab=supplies';
+  }
   if (text.includes('booking') || text.includes('rental application') || text.includes('คำขอจอง') || text.includes('ใบสมัคร') || type === 'booking') {
     return '/admin/bookings';
   }
@@ -40,8 +44,12 @@ export const getNotificationTargetUrl = (title: string, message?: string, type?:
   return '/admin/dashboard';
 };
 
-const getTargetPageLabel = (targetUrl: string, language: string): string => {
+const getTargetPageLabel = (targetUrl: string, language: string, t: (key: string) => string): string => {
   switch (targetUrl) {
+    case '/admin/maintenance?tab=predictions':
+      return t('mnt.predictions.viewPredictions');
+    case '/admin/maintenance?tab=supplies':
+      return language === 'th' ? 'ไปยังคลังสต็อกอะไหล่' : 'View Spare Parts Inventory';
     case '/admin/bookings':
       return language === 'th' ? 'ไปยังหน้ารายการจองห้องพัก' : 'View to Bookings';
     case '/admin/maintenance':
@@ -132,6 +140,13 @@ export const NotificationCenter: React.FC = () => {
 
   const getNotificationIcon = (title: string, type?: string) => {
     const cleaned = removeEmojis(title);
+    if (type === 'inventory' || cleaned.toLowerCase().includes('low inventory') || cleaned.toLowerCase().includes('low stock') || cleaned.includes('ใกล้หมด')) {
+      return {
+        icon: Package,
+        bg: 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 border-amber-500/20',
+        badgeText: language === 'th' ? 'ใกล้หมดแล้ว' : 'Low Stock'
+      };
+    }
     if (cleaned.includes('Rental Application') || cleaned.includes('Booking') || cleaned.includes('จอง') || type === 'booking') {
       return {
         icon: FileText,
@@ -204,7 +219,7 @@ export const NotificationCenter: React.FC = () => {
             const displayTitle = removeEmojis(n.title);
             const displayMessage = removeEmojis(n.message);
             const targetUrl = getNotificationTargetUrl(n.title, n.message, n.type);
-            const targetLabel = getTargetPageLabel(targetUrl, language);
+            const targetLabel = getTargetPageLabel(targetUrl, language, t);
 
             return (
               <div

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileSignature, FileText, Wrench,
   BedDouble, History, Bell, ArrowLeft, Building2, CalendarCheck,
-  Sun, Moon, Menu, X, Globe, KeyRound
+  Sun, Moon, Menu, X, Globe, KeyRound, FolderArchive, BarChart3
 } from 'lucide-react';
 import { getNotifications, getBookings } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
@@ -50,7 +50,9 @@ export const AdminSidebar: React.FC = () => {
     { name: t('admin.nav.buildings'), path: '/admin/buildings', icon: Building2 },
     { name: t('admin.nav.tenants'), path: '/admin/tenants', icon: FileSignature },
     { name: t('admin.nav.utilityBills'), path: '/admin/utility-bills', icon: FileText },
+    { name: t('admin.nav.reports'), path: '/admin/reports', icon: BarChart3 },
     { name: t('admin.nav.maintenance'), path: '/admin/maintenance', icon: Wrench },
+    { name: language === 'th' ? 'คลังเอกสารสแกน' : 'Document Center', path: '/admin/documents', icon: FolderArchive },
     { name: t('admin.nav.rooms'), path: '/admin/rooms', icon: BedDouble },
     { name: t('admin.nav.bookings'), path: '/admin/bookings', icon: CalendarCheck, badge: pendingBookingCount },
     { name: t('admin.nav.activityLog'), path: '/admin/activity-log', icon: History },
@@ -184,9 +186,6 @@ export const AdminSidebar: React.FC = () => {
                   <KeyRound className="w-4 h-4 text-amber-400" />
                   <span>{t('admin.nav.changePassword')}</span>
                 </div>
-                <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  ROTATION
-                </span>
               </button>
               <Link
                 to="/rooms"
@@ -289,9 +288,6 @@ export const AdminSidebar: React.FC = () => {
               <span className="flex items-center gap-2">
                 <KeyRound className="w-3.5 h-3.5 text-amber-400" />
                 <span>{t('admin.nav.changePassword')}</span>
-              </span>
-              <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                ROTATION
               </span>
             </button>
 

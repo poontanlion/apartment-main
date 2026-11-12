@@ -9,21 +9,34 @@ import {
   getNotifications, addNotification
 } from '../../services/api';
 import { formatCurrency, formatDate, formatSuppliesSummary } from '../../utils/formatters';
-import { Wrench, Plus, Package, History, BellRing, CheckCircle2, Clock, Search, Pencil, Trash2, DollarSign, Archive } from 'lucide-react';
+import { Wrench, Plus, Package, History, BellRing, CheckCircle2, Clock, Search, Pencil, Trash2, DollarSign, Archive, FileText, Calendar } from 'lucide-react';
+import { MaintenancePredictionsTab } from '../../components/admin/MaintenancePredictionsTab';
+import { ScannedDocumentModal } from '../../components/admin/ScannedDocumentModal';
 import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'sonner';
 
 // 'archived' is stored by the backend (MaintenanceTask.archived); declared locally so this page doesn't depend on the shared types file
 type TaskWithArchive = MaintenanceTask & { archived?: boolean };
+type MaintenanceTab = 'tasks' | 'supplies' | 'logs' | 'reminders' | 'predictions';
 
 export const MaintenanceManagement: React.FC = () => {
   const { t, language } = useLanguage();
-  const [searchParams] = useSearchParams();
-  const initialBuildingId = searchParams.get('buildingId') || 'All';
-
-  const [activeTab, setActiveTab] = useState<'tasks' | 'supplies' | 'logs' | 'reminders'>('tasks');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab: MaintenanceTab = ['tasks', 'supplies', 'logs', 'reminders', 'predictions'].includes(tabParam || '')
+    ? tabParam as MaintenanceTab : 'tasks';
+  const setActiveTab = (tab: MaintenanceTab) => setSearchParams(previous => {
+    const next = new URLSearchParams(previous);
+    next.set('tab', tab);
+    return next;
+  });
+  const buildingFilter = searchParams.get('buildingId') || 'All';
+  const setBuildingFilter = (building: string) => setSearchParams(previous => {
+    const next = new URLSearchParams(previous);
+    if (building === 'All') next.delete('buildingId'); else next.set('buildingId', building);
+    return next;
+  });
   const [occupancyFilter, setOccupancyFilter] = useState<'All' | 'Occupied' | 'Vacant/Common'>('All');
-  const [buildingFilter, setBuildingFilter] = useState<string>(initialBuildingId);
   const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
   const [supplies, setSupplies] = useState<SupplyItem[]>([]);
   const [logs, setLogs] = useState<MaintenanceLog[]>([]);
@@ -61,6 +74,7 @@ export const MaintenanceManagement: React.FC = () => {
     unitName: 'pcs',
     stockQuantity: 10,
     unitCost: 100,
+    lowStockThreshold: 2,
   });
 
   const [showReminderModal, setShowReminderModal] = useState(false);
@@ -73,6 +87,8 @@ export const MaintenanceManagement: React.FC = () => {
   const [selectedSupplyId, setSelectedSupplyId] = useState<string>('');
   const [selectedSupplyQty, setSelectedSupplyQty] = useState<number>(1);
   const [usedSuppliesList, setUsedSuppliesList] = useState<Array<{ supplyId: string; name: string; quantity: number; unitCost: number; unitName: string }>>([]);
+  const [scannedDocTask, setScannedDocTask] = useState<MaintenanceTask | null>(null);
+  const [scannedDocLog, setScannedDocLog] = useState<MaintenanceLog | null>(null);
 
   const [showLogModal, setShowLogModal] = useState(false);
   const [logFormData, setLogFormData] = useState<Partial<MaintenanceLog>>({});
@@ -170,7 +186,7 @@ export const MaintenanceManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    if (activeTab !== 'predictions') fetchData();
   }, [activeTab]);
 
   const handleAddSupplyToTask = () => {
@@ -197,7 +213,12 @@ export const MaintenanceManagement: React.FC = () => {
       // Compute costs
       const suppliesCost = updated.reduce((sum, item) => sum + (item.quantity * (item.unitCost || 0)), 0);
       const laborCost = taskFormData.laborCost || 0;
-      const suppliesSummary = updated.map(item => `${item.name} x${item.quantity} (฿${item.quantity * (item.unitCost || 0)})`).join(', ');
+      const suppliesSummary = JSON.stringify(updated.map(item => ({
+        supply_id: item.supplyId,
+        name: item.name,
+        quantity: item.quantity,
+        unit_cost: item.unitCost || 0,
+      })));
 
       setTaskFormData(f => ({
         ...f,
@@ -216,9 +237,7 @@ export const MaintenanceManagement: React.FC = () => {
       const updated = prev.filter(item => item.supplyId !== supplyId);
       const suppliesCost = updated.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
       const labor = taskFormData.laborCost || 0;
-      const suppliesSummary = updated.length > 0
-        ? updated.map(item => `${item.name} x${item.quantity} (฿${item.quantity * item.unitCost})`).join(', ')
-        : '';
+      const suppliesSummary = JSON.stringify(updated.map(item => ({ supply_id: item.supplyId, name: item.name, quantity: item.quantity, unit_cost: item.unitCost })));
 
       setTaskFormData(f => ({
         ...f,
@@ -247,20 +266,11 @@ export const MaintenanceManagement: React.FC = () => {
         payload.occupancyType = (rm && (rm.status === 'Occupied' || !!rm.currentTenantId)) ? 'Occupied' : 'Vacant/Common';
       }
 
-      await saveMaintenanceTask(payload);
-
-      // Auto-deduct stock for used supplies
       if (usedSuppliesList.length > 0) {
-        for (const used of usedSuppliesList) {
-          const sup = supplies.find(s => s.id === used.supplyId);
-          if (sup) {
-            const newStock = Math.max(0, (sup.stockQuantity || 0) - used.quantity);
-            await saveSupply({ ...sup, stockQuantity: newStock });
-          }
-        }
+        payload.suppliesUsed = JSON.stringify(usedSuppliesList.map(item => ({ supply_id: item.supplyId, name: item.name, quantity: item.quantity, unit_cost: item.unitCost })));
       }
-
-      toast.success(language === 'th' ? 'บันทึกข้อมูลงานซ่อม ค่าใช้จ่าย และตัดสต็อกอะไหล่เรียบร้อยแล้ว' : 'Work order, expenses and parts saved successfully');
+      await saveMaintenanceTask(payload);
+      toast.success(language === 'th' ? 'บันทึกงานซ่อมแล้ว ระบบจะตัดสต็อกเมื่อปิดงาน' : 'Work order saved; stock is deducted when the task is completed');
       setShowTaskModal(false);
       fetchData();
     } catch (err) {
@@ -270,7 +280,21 @@ export const MaintenanceManagement: React.FC = () => {
   };
 
   const handleEditTask = (task: MaintenanceTask) => {
-    setUsedSuppliesList([]);
+    let parsedSupplies: Array<{ supplyId: string; name: string; quantity: number; unitCost: number; unitName: string }> = [];
+    try {
+      const parsed = JSON.parse(task.suppliesUsed || '[]');
+      if (Array.isArray(parsed)) parsedSupplies = parsed.map((entry: any) => {
+        const item = supplies.find(s => s.id === entry.supply_id || s.name === entry.name);
+        return { supplyId: entry.supply_id || item?.id || entry.name, name: entry.name || item?.name || 'Supply', quantity: Number(entry.quantity) || 1, unitCost: Number(entry.unit_cost ?? entry.unitCost ?? item?.unitCost) || 0, unitName: item?.unitName || 'pcs' };
+      });
+    } catch {
+      parsedSupplies = (task.suppliesUsed || '').split(',').map(part => {
+        const match = part.trim().match(/^(.*?)\s+x(\d+)/i);
+        const item = supplies.find(s => s.name === (match?.[1] || '').trim());
+        return item && match ? { supplyId: item.id, name: item.name, quantity: Number(match[2]), unitCost: item.unitCost || 0, unitName: item.unitName || 'pcs' } : null;
+      }).filter((item): item is NonNullable<typeof item> => item !== null);
+    }
+    setUsedSuppliesList(parsedSupplies);
     setTaskFormData({
       ...task,
       laborCost: task.laborCost || 0,
@@ -397,7 +421,7 @@ export const MaintenanceManagement: React.FC = () => {
       </div>
 
       {/* NAVIGATION TABS */}
-      <div className="flex border-b border-nike-hairline dark:border-nike-dark-card gap-4">
+      <div className="flex overflow-x-auto whitespace-nowrap border-b border-nike-hairline dark:border-nike-dark-card gap-4">
         <button
           onClick={() => setActiveTab('tasks')}
           className={`pb-3 text-sm font-semibold flex items-center gap-2 transition-all border-b-2 ${
@@ -433,7 +457,17 @@ export const MaintenanceManagement: React.FC = () => {
         >
           <BellRing className="w-4 h-4" /> {t('mnt.reminders')}
         </button>
+        <button
+          onClick={() => setActiveTab('predictions')}
+          className={`pb-3 text-sm font-semibold flex items-center gap-2 transition-all border-b-2 ${
+            activeTab === 'predictions' ? 'border-rose-600 text-rose-600 dark:text-rose-400' : 'border-transparent text-nike-mute'
+          }`}
+        >
+          <Calendar className="w-4 h-4" /> {t('mnt.predictions.title')}
+        </button>
       </div>
+
+      {activeTab === 'predictions' && <MaintenancePredictionsTab buildingId={buildingFilter === 'All' ? undefined : buildingFilter} />}
 
       {/* TAB 1: MAINTENANCE TASKS */}
       {activeTab === 'tasks' && (
@@ -585,7 +619,9 @@ export const MaintenanceManagement: React.FC = () => {
                     </td>
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        task.priority === 'High' ? 'bg-rose-500/10 text-rose-600' : 'bg-blue-500/10 text-blue-600'
+                        task.priority === 'High' ? 'bg-rose-500/10 text-rose-600'
+                          : task.priority === 'Medium' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                          : 'bg-blue-500/10 text-blue-600'
                       }`}>
                         {task.priority}
                       </span>
@@ -606,19 +642,32 @@ export const MaintenanceManagement: React.FC = () => {
                       </select>
                     </td>
                     <td className="p-3 text-right">
-                      {task.status === 'Completed' ? (
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
-                          onClick={() => handleArchiveTask(task)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition-all cursor-pointer"
-                          title={language === 'th' ? 'จัดเก็บไปที่ประวัติซ่อมรายห้อง' : 'Archive to per-unit maintenance logs'}
+                          onClick={() => setScannedDocTask(task)}
+                          className={`px-2 py-1 text-[11px] font-medium rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer ${
+                            task.scannedDocument
+                              ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400 hover:bg-blue-600/20'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700'
+                          }`}
+                          title={task.scannedDocument ? 'ดูเอกสารสแกนรายงานซ่อม' : 'แนบเอกสารสแกนรายงานซ่อม'}
                         >
-                          <Archive className="w-3.5 h-3.5" />
-                          {language === 'th' ? 'จัดเก็บ' : 'Archive'}
+                          <FileText className="w-3.5 h-3.5" />
+                          {task.scannedDocument ? (language === 'th' ? 'ดูรายงานสแกน' : 'View Report') : (language === 'th' ? 'แนบรายงาน' : 'Attach Report')}
                         </button>
-                      ) : (
-                        <span className="text-nike-stone">—</span>
-                      )}
+                        {task.status === 'Completed' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleArchiveTask(task)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition-all cursor-pointer"
+                            title={language === 'th' ? 'จัดเก็บไปที่ประวัติซ่อมรายห้อง' : 'Archive to per-unit maintenance logs'}
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                            {language === 'th' ? 'จัดเก็บ' : 'Archive'}
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -643,7 +692,7 @@ export const MaintenanceManagement: React.FC = () => {
             </div>
             <button
               onClick={() => {
-                setSupplyFormData({ name: '', category: 'Electrical', stockQuantity: 10, unitCost: 100, unitName: language === 'th' ? 'ชิ้น' : 'pcs' });
+                setSupplyFormData({ name: '', category: 'Electrical', stockQuantity: 10, unitCost: 100, lowStockThreshold: 2, unitName: language === 'th' ? 'ชิ้น' : 'pcs' });
                 setShowSupplyModal(true);
               }}
               className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 flex items-center gap-1.5 cursor-pointer shadow-xs"
@@ -654,7 +703,7 @@ export const MaintenanceManagement: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {supplies.map(item => {
-              const isLowStock = (item.stockQuantity ?? 0) <= 3;
+              const isLowStock = (item.stockQuantity ?? 0) <= (item.lowStockThreshold ?? 2);
               return (
                 <div key={item.id} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-nike-dark-surface shadow-xs space-y-3">
                   <div className="flex justify-between items-start">
@@ -677,6 +726,7 @@ export const MaintenanceManagement: React.FC = () => {
                     <span className="text-slate-500">{language === 'th' ? 'ราคาต่อหน่วย:' : 'Unit Price:'} <strong className="text-slate-900 dark:text-white font-bold">{formatCurrency(item.unitCost)}</strong></span>
                     <span className="text-slate-500">{language === 'th' ? 'คงเหลือ:' : 'Stock:'} <strong className="text-slate-900 dark:text-white font-extrabold text-sm">{item.stockQuantity}</strong> {item.unitName}</span>
                   </div>
+                  <p className="text-[11px] text-slate-500">{language === 'th' ? 'แจ้งเตือนเมื่อเหลือไม่เกิน:' : 'Alert when stock is at or below:'} <strong>{item.lowStockThreshold ?? 2} {item.unitName}</strong></p>
 
                   <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-1.5">
@@ -785,6 +835,18 @@ export const MaintenanceManagement: React.FC = () => {
                     <td className="p-3 text-right font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">{formatCurrency(log.totalCost)}</td>
                     <td className="p-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setScannedDocLog(log)}
+                          className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                            log.scannedDocument
+                              ? 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40'
+                              : 'text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                          title={log.scannedDocument ? 'ดูเอกสารสแกนรายงานซ่อม' : 'แนบเอกสารสแกนรายงานซ่อม'}
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           onClick={() => handleEditLog(log)}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
@@ -1200,6 +1262,35 @@ export const MaintenanceManagement: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">
+                    {language === 'th' ? 'แนบไฟล์สแกนรายงานซ่อมบำรุง / ใบเสร็จค่าซ่อม' : 'Scanned Maintenance Report / Repair Receipt'}
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 14 * 1024 * 1024) {
+                          toast.error('ขนาดไฟล์ต้องไม่เกิน 14MB');
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          setTaskFormData(prev => ({ ...prev, scannedDocument: ev.target?.result as string }));
+                          toast.success('แนบไฟล์รายงานซ่อมบำรุงแล้ว');
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100 dark:file:bg-slate-800 dark:file:text-slate-300 cursor-pointer"
+                  />
+                  {taskFormData.scannedDocument && (
+                    <span className="text-[11px] text-emerald-600 block mt-1">✓ มีไฟล์สแกนรายงานแนบอยู่แล้ว</span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1236,7 +1327,7 @@ export const MaintenanceManagement: React.FC = () => {
                   <input
                     type="number"
                     required
-                    value={supplyFormData.stockQuantity || 10}
+                    value={supplyFormData.stockQuantity ?? 10}
                     onChange={(e) => setSupplyFormData({ ...supplyFormData, stockQuantity: Number(e.target.value) })}
                     className="w-full p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white focus:outline-none transition-all"
                   />
@@ -1246,10 +1337,16 @@ export const MaintenanceManagement: React.FC = () => {
                   <input
                     type="number"
                     required
-                    value={supplyFormData.unitCost || 100}
+                    value={supplyFormData.unitCost ?? 100}
                     onChange={(e) => setSupplyFormData({ ...supplyFormData, unitCost: Number(e.target.value) })}
                     className="w-full p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white focus:outline-none transition-all"
                   />
+                </div>
+                <div>
+                  <label className="block text-nike-mute mb-1 font-medium">{language === 'th' ? 'แจ้งเตือนเมื่อเหลือไม่เกิน' : 'Low stock alert threshold'}</label>
+                  <input type="number" min="0" required value={supplyFormData.lowStockThreshold ?? 2}
+                    onChange={(e) => setSupplyFormData({ ...supplyFormData, lowStockThreshold: Math.max(0, Number(e.target.value)) })}
+                    className="w-full p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white focus:outline-none transition-all" />
                 </div>
               </div>
             </div>
@@ -1372,6 +1469,33 @@ export const MaintenanceManagement: React.FC = () => {
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-nike-mute mb-1 font-medium">{language === 'th' ? 'ไฟล์สแกนรายงานซ่อมบำรุง' : 'Scanned Report File'}</label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 14 * 1024 * 1024) {
+                        toast.error('ขนาดไฟล์ต้องไม่เกิน 14MB');
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        setLogFormData(prev => ({ ...prev, scannedDocument: ev.target?.result as string }));
+                        toast.success('แนบไฟล์รายงานซ่อมบำรุงแล้ว');
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100 cursor-pointer"
+                />
+                {logFormData.scannedDocument && (
+                  <span className="text-[11px] text-emerald-600 block mt-1">✓ มีไฟล์สแกนรายงานแนบอยู่แล้ว</span>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-nike-hairline dark:border-nike-dark-card">
@@ -1380,6 +1504,40 @@ export const MaintenanceManagement: React.FC = () => {
             </div>
           </form>
         </div>
+      )}
+
+      {/* SCANNED REPORT MODAL (TASK) */}
+      {scannedDocTask && (
+        <ScannedDocumentModal
+          title={`เอกสารสแกนรายงานซ่อมบำรุง - งาน ${scannedDocTask.taskNo}`}
+          subtitle={`ห้อง: ${scannedDocTask.roomNumber} | หมวดหมู่: ${scannedDocTask.category} | ผู้แจ้ง: ${scannedDocTask.reporterName || '-'}`}
+          documentUrl={scannedDocTask.scannedDocument}
+          onClose={() => setScannedDocTask(null)}
+          onSave={async (newDocUrl) => {
+            const updatedTask = { ...scannedDocTask, scannedDocument: newDocUrl };
+            await saveMaintenanceTask(updatedTask);
+            setTasks(prev => prev.map(t => t.id === scannedDocTask.id ? { ...t, scannedDocument: newDocUrl } : t));
+            setScannedDocTask(prev => prev ? { ...prev, scannedDocument: newDocUrl } : null);
+            fetchData();
+          }}
+        />
+      )}
+
+      {/* SCANNED REPORT MODAL (LOG) */}
+      {scannedDocLog && (
+        <ScannedDocumentModal
+          title={`เอกสารสแกนรายงานซ่อมบำรุง - ประวัติห้อง ${scannedDocLog.roomNumber}`}
+          subtitle={`รหัสงาน: ${scannedDocLog.taskNo} | วันที่: ${scannedDocLog.date} | ช่าง: ${scannedDocLog.performedBy}`}
+          documentUrl={scannedDocLog.scannedDocument}
+          onClose={() => setScannedDocLog(null)}
+          onSave={async (newDocUrl) => {
+            const updatedLog = { ...scannedDocLog, scannedDocument: newDocUrl };
+            await saveMaintenanceLog(updatedLog);
+            setLogs(prev => prev.map(l => l.id === scannedDocLog.id ? { ...l, scannedDocument: newDocUrl } : l));
+            setScannedDocLog(prev => prev ? { ...prev, scannedDocument: newDocUrl } : null);
+            fetchData();
+          }}
+        />
       )}
 
     </div>

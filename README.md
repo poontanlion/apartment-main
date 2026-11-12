@@ -25,6 +25,10 @@
 5. [การทดสอบระบบ End-to-End (Automated E2E ด้วย Playwright & Core Workflow)](#5-การทดสอบระบบ-end-to-end-automated-e2e-ด้วย-playwright--core-workflow)
    - 5.1 [Automated E2E Testing ด้วย Playwright (12 Scenarios)](#51-automated-e2e-testing-ด้วย-playwright-12-scenarios)
    - 5.2 [ขั้นตอนการทดสอบฟังก์ชันทางธุรกิจด้วยตนเอง (Manual E2E Walkthrough)](#52-ขั้นตอนการทดสอบฟังก์ชันทางธุรกิจด้วยตนเอง-manual-e2e-walkthrough)
+6. [ระบบ Observability, Log, Trace, Metric ใน Grafana (Full Stack)](#6-ระบบ-observability-log-trace-metric-ใน-grafana-full-stack)
+   - 6.1 [ภาพรวมสถาปัตยกรรม (Grafana LGTM Stack)](#61-ภาพรวมสถาปัตยกรรม-grafana-lgtm-stack)
+   - 6.2 [การจำแนกประเภท Metric (Monitoring Value vs Business Value)](#62-การจำแนกประเภท-metric-monitoring-value-vs-business-value)
+   - 6.3 [วิธีการเปิดใช้งานและเข้าชมแดชบอร์ด](#63-วิธีการเปิดใช้งานและเข้าชมแดชบอร์ด)
 
 ---
 
@@ -128,14 +132,14 @@
    cp .env.example .env        # แก้รหัสผ่านใน .env ได้ตามต้องการ
    docker compose up -d db
    ```
-   PostgreSQL จะเปิดที่ `localhost:5432` (database `apartmentdb`, user `apartment`)
+   PostgreSQL จะเปิดที่ `localhost:5433` (database `apartment_prediction_dev`, user `apartment`)
    ตาราง (schema) ถูกสร้างอัตโนมัติด้วย Flyway จากไฟล์ใน `backend/src/main/resources/db/migration/` ตอน Backend start
 2. **Backend:**
    ```bash
    cd backend
    mvnw.cmd spring-boot:run   # (หรือ ./mvnw spring-boot:run บน macOS/Linux)
    ```
-   Backend จะเปิดทำงานที่ `http://localhost:8080`
+   Backend จะเปิดทำงานที่ `http://localhost:8083`
    (ถ้าเปลี่ยน user/password ใน `.env` ให้ตั้ง `DB_USERNAME` / `DB_PASSWORD` ให้ตรงกันก่อนรัน)
 3. **Frontend:** เปิด Terminal อีกหน้าต่าง
    ```bash
@@ -143,7 +147,7 @@
    npm install
    npm run dev
    ```
-   Frontend จะเปิดทำงานที่ `http://localhost:3000`
+   Frontend จะเปิดทำงานที่ `http://localhost:3001`
 
 ---
 
@@ -166,7 +170,7 @@
 3. คำสั่งปิดระบบ:
    ```bash
    docker compose down        # ข้อมูลยังอยู่ใน volume pgdata
-   docker compose down -v     # ⚠️ ลบข้อมูลในฐานข้อมูลทิ้งทั้งหมด
+   docker compose down -v     # ลบข้อมูลในฐานข้อมูลทิ้งทั้งหมด
    ```
 
 ---
@@ -331,3 +335,56 @@
 4. **ระบบงานซ่อมบำรุงและเบิกอุปกรณ์ (Maintenance & Supplies):**
    - ทดสอบสร้างคำขอแจ้งซ่อม (เช่น หลอดไฟเสีย, ล้างแอร์)
    - ตรวจสอบรายการเบิกจ่ายอุปกรณ์ และการตั้งค่าแจ้งเตือนรอบการบำรุงรักษา
+
+---
+
+## 6. ระบบ Observability, Log, Trace, Metric ใน Grafana (Full Stack)
+> **อ้างอิงตามแนวทาง Class Week 13: Observability 101 (SpringBootObservability)**
+
+โปรเจกต์ได้รับการติดตั้งระบบ Observability ครบวงจร 3 เสาหลัก รวมเข้ากับ **Single Pane of Glass บน Grafana**:
+1. **Metrics (Prometheus):** Spring Boot Actuator + Micrometer รวบรวมทั้ง **Business Value Metrics** (อัตราเข้าพัก, รายได้, หนี้ค้าง, งานซ่อม) และ **Monitoring Value Metrics** (RED Method: RPS, 5xx Errors, Latency, JVM Memory)
+2. **Traces (Grafana Tempo):** OpenTelemetry OTLP Tracer รองรับ **Multi-layer Nested Spans (`@NewSpan`)** แสดง Waterfall Tree ตั้งแต่ระดับ HTTP Controller ลึกลงไปยัง Service Layer (ตาม Slide 6, 8, 9)
+3. **Logs (Grafana Loki):** ส่ง Log ตรงด้วย **`loki-logback-appender` (Loki4j)** และ Promtail พร้อมกำกับ `service_name` และ pattern `[%X{traceId:-}%X{spanId:-}]` เพื่อทำ **Trace to Log Correlation** ในคลิกเดียว (ตาม Slide 4, 10)
+4. **Dashboards & Alerting (Grafana):** แดชบอร์ดสำเร็จรูป 2 ชุด พร้อมกฎแจ้งเตือน 8 ข้อ (4 Monitoring Alerts + 4 Business Alerts)
+
+### 6.1 ภาพรวมสถาปัตยกรรมและคู่มือฉบับสมบูรณ์
+รายละเอียดโค้ดการตั้งค่า, Alerting Rules และสถาปัตยกรรมเชิงลึกทั้งหมด รวบรวมไว้ใน **[OBSERVABILITY_GUIDE.md](OBSERVABILITY_GUIDE.md)**
+
+### 6.2 การจำแนกประเภท Metric (Monitoring Value vs Business Value)
+
+- **Business Value Metrics (คุณค่าในเชิงธุรกิจหอพัก):**
+  - `apartment_rooms_occupancy_rate`: อัตราการเข้าพัก (% Occupancy Rate) - ตัวชี้วัดสูงสุดของธุรกิจ
+  - `apartment_rooms_occupied`, `apartment_rooms_available`, `apartment_rooms_maintenance`: จำแนกสต็อกห้องพัก
+  - `apartment_bills_total_invoiced` vs `apartment_bills_paid_amount`: ยอดออกบิลรวมเทียบกับเงินสดที่เก็บได้จริง
+  - `apartment_bills_outstanding_amount`: ยอดหนี้ค้างชำระสะสมเพื่อติดตามทวงหนี้
+  - `apartment_maintenance_tasks_active`: งานซ่อมที่ค้างอยู่ และงานซ่อมด่วนฉุกเฉิน (High Priority)
+  - `apartment_maintenance_predictions_total`: จำนวนอุปกรณ์ที่ระบบ AI พยากรณ์พบความเสี่ยงล่วงหน้า
+  - `apartment_bookings_pending`: คำขอจองห้องพักใหม่ที่รออนุมัติ สะท้อนความต้องการของลูกค้า
+- **Monitoring Value Metrics (เชิงวิศวกรรมระบบ & SRE RED Method):**
+  - `http_server_requests_seconds_count`: Throughput หรือคำขอต่อวินาที (RPS)
+  - `http_server_requests_seconds_max`: API Response Time / Latency (p95)
+  - `http_server_requests_seconds_count{status=~"5.."}`: HTTP 5xx Error Rate
+  - `jvm_memory_used_bytes{area="heap"}`: การใช้หน่วยความจำ JVM Heap
+  - `hikaricp_connections_active` / `pending`: สุขภาพ Connection Pool ของ PostgreSQL
+
+### 6.3 วิธีการเปิดใช้งานและเข้าชมระบบ
+
+รันชุด Observability พร้อมกับระบบทั้งหมดผ่าน Docker Compose:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+```
+
+หรือกรณีที่รัน Backend แบบ Local อยู่แล้ว:
+```bash
+docker compose -f docker-compose.observability.yml up -d
+```
+
+เข้าชมระบบผ่านเบราว์เซอร์:
+- **Grafana Dashboard:** [http://localhost:3000](http://localhost:3000) (Login: `admin` / `admin`)
+  - โฟลเดอร์ **Apartment System**:
+    - `Victory Apartment - Full Observability & Business Value` (apartment-obs-01)
+    - `Victory Apartment - Alerting & Trends` (apartment-obs-02)
+- **Tempo Waterfall Traces:** Grafana เมนู **Explore** $\rightarrow$ เลือก **Tempo** เพื่อดูแท่ง Spans ซ้อนระดับ Controller $\rightarrow$ Service
+- **Loki Logs & Correlation:** Grafana เมนู **Explore** $\rightarrow$ เลือก **Loki** หรือคลิกปุ่ม **TraceID** จาก Log เพื่อเปิดดู Trace
+- **Prometheus UI:** [http://localhost:9090](http://localhost:9090) (ตรวจสอบ Raw Metrics & Alert Rules)
+- **Backend Prometheus Endpoint:** [http://localhost:8080/actuator/prometheus](http://localhost:8080/actuator/prometheus)

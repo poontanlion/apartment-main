@@ -1,11 +1,49 @@
 import {
-  Room, Tenant, Lease, UtilityBill, BillStatus, MaintenanceTask, SupplyItem,
-  MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication
+  Room, Tenant, Lease, UtilityBill, BillStatus, BillPayment, MaintenanceTask, SupplyItem,
+  MaintenanceLog, ScheduledReminder, AppNotification, ActivityLog, Booking, Building, BookingLeaseApplication,
+
+  RoomPrice, RoomPriceHistory, RentQuote, MaintenancePredictionFilters, MaintenancePredictionResponse, MaintenancePredictionRow, 
+  SummaryReport, SummaryReportFilters, BankInfo, BillingSettings
+
 } from '../types';
 import { BookingLeaseError } from '../utils/bookingLeaseErrors';
 import { BookingRequestError } from '../utils/bookingErrors';
 
 const API_BASE = '/api';
+
+export class MaintenancePredictionApiError extends Error {
+  constructor(public readonly status: number) {
+    super(`Maintenance prediction request failed (${status})`);
+    this.name = 'MaintenancePredictionApiError';
+  }
+}
+
+// The existing relative /api URLs use fetch's same-origin session cookies.
+// Keep that behavior explicit here and retain the status for the admin access state.
+async function fetchPredictionJson<T>(url: string, options: RequestInit): Promise<T> {
+  const response = await fetch(url, { ...options, credentials: 'same-origin' });
+  if (!response.ok) throw new MaintenancePredictionApiError(response.status);
+  return response.json();
+}
+
+export const getMaintenancePredictions = (
+  filters: MaintenancePredictionFilters = {}, signal?: AbortSignal,
+): Promise<MaintenancePredictionResponse> => {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value);
+  return fetchPredictionJson(`${API_BASE}/maintenance/predictions${query.size ? `?${query}` : ''}`, { signal });
+};
+
+export const refreshMaintenancePredictions = (signal?: AbortSignal): Promise<{ success: number; failure: number }> =>
+  fetchPredictionJson(`${API_BASE}/maintenance/predictions/refresh`, { method: 'POST', signal });
+
+export const setMaintenanceAppointment = (roomId: string, taskTypeId: string, date: string): Promise<MaintenancePredictionRow> =>
+  fetchPredictionJson(`${API_BASE}/maintenance/predictions/${encodeURIComponent(roomId)}/${encodeURIComponent(taskTypeId)}/appointment`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date }),
+  });
+
+export const cancelMaintenanceAppointment = (roomId: string, taskTypeId: string): Promise<MaintenancePredictionRow> =>
+  fetchPredictionJson(`${API_BASE}/maintenance/predictions/${encodeURIComponent(roomId)}/${encodeURIComponent(taskTypeId)}/appointment`, { method: 'DELETE' });
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -14,7 +52,11 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(error.message || error.error || res.statusText);
+    const rowErrors = Array.isArray(error.errors)
+      ? error.errors.map((item: { line?: number; message?: string }) =>
+        `${item.line ? `Line ${item.line}: ` : ''}${item.message || ''}`.trim())
+      : [];
+    throw new Error([error.message || error.error || res.statusText, ...rowErrors].filter(Boolean).join('\n'));
   }
   return res.json();
 }
@@ -67,6 +109,37 @@ export const getRoomById = async (id: string): Promise<Room | null> => {
     return null;
   }
 };
+
+export const getRoomPrices = (roomId: string): Promise<RoomPriceHistory> =>
+  fetchJson<RoomPriceHistory>(`${API_BASE}/rooms/${roomId}/prices`);
+
+export const addRoomPrice = (roomId: string, price: number, effectiveMonth: string): Promise<RoomPrice> =>
+  fetchJson<RoomPrice>(`${API_BASE}/rooms/${roomId}/prices`, {
+    method: 'POST',
+    body: JSON.stringify({ price, effectiveMonth }),
+  });
+
+export const deleteRoomPrice = async (roomId: string, priceId: string): Promise<void> => {
+  const res = await fetch(`${API_BASE}/rooms/${roomId}/prices/${priceId}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(error.message || res.statusText);
+  }
+};
+
+/** The room's price for a month given as YYYY-MM. */
+export const getRoomPriceForMonth = async (roomId: string, month: string): Promise<number> => {
+  const result = await fetchJson<{ month: string; price: number }>(
+    `${API_BASE}/rooms/${roomId}/price?month=${encodeURIComponent(month)}`,
+  );
+  return result.price;
+};
+
+/** The rent a bill would get. billingMonth looks like "August 2026". */
+export const getRentQuote = (roomId: string, billingMonth: string): Promise<RentQuote> =>
+  fetchJson<RentQuote>(
+    `${API_BASE}/utility-bills/rent-quote?roomId=${encodeURIComponent(roomId)}&month=${encodeURIComponent(billingMonth)}`,
+  );
 
 export const saveRoom = async (roomData: Partial<Room>): Promise<Room> => {
   if (roomData.id) {
@@ -179,15 +252,53 @@ export const saveUtilityBill = async (billData: Partial<UtilityBill>): Promise<U
   });
 };
 
-export const updateBillStatus = async (billId: string, status: BillStatus, slipImage?: string): Promise<UtilityBill | null> => {
+export const importUtilityBills = (rows: Array<{ line: number; bill: Partial<UtilityBill> }>): Promise<{ imported: number }> =>
+  fetchJson<{ imported: number }>(`${API_BASE}/utility-bills/import`, {
+    method: 'POST',
+    body: JSON.stringify(rows),
+  });
+
+export const getBillingSettings = (): Promise<BillingSettings> =>
+  fetchJson<BillingSettings>(`${API_BASE}/billing-settings`);
+
+export const saveBillingSettings = (monthlyInterestRate: number): Promise<BillingSettings> =>
+  fetchJson<BillingSettings>(`${API_BASE}/billing-settings`, {
+    method: 'PUT', body: JSON.stringify({ monthlyInterestRate }),
+  });
+
+/** Blank fields clear the stored value. */
+export const saveBankInfo = (info: BankInfo): Promise<BillingSettings> =>
+  fetchJson<BillingSettings>(`${API_BASE}/billing-settings/bank-info`, {
+    method: 'PUT', body: JSON.stringify(info),
+  });
+
+export const updateBillStatus = async (billId: string, status: BillStatus, slipImage?: string, scannedDocument?: string): Promise<UtilityBill | null> => {
   try {
     return await fetchJson<UtilityBill>(`${API_BASE}/utility-bills/${billId}/status`, {
       method: 'PUT',
-      body: JSON.stringify({ status, slipImage }),
+      body: JSON.stringify({ status, slipImage, scannedDocument }),
     });
   } catch {
     return null;
   }
+};
+
+export const getBillPayments = (billId: string): Promise<BillPayment[]> =>
+  fetchJson<BillPayment[]>(`${API_BASE}/utility-bills/${billId}/payments`);
+
+export const addBillPayment = (billId: string, payload: { amount: number; note?: string; proofImage?: string }): Promise<{ bill: UtilityBill; payment: BillPayment }> =>
+  fetchJson<{ bill: UtilityBill; payment: BillPayment }>(`${API_BASE}/utility-bills/${billId}/payments`, { method: 'POST', body: JSON.stringify(payload) });
+
+// ----------------------------------------------------
+// SUMMARY REPORTS API
+// ----------------------------------------------------
+/** Lets errors through: a failed report must not read as a report of zero. */
+export const getSummaryReport = (filters: SummaryReportFilters, signal?: AbortSignal): Promise<SummaryReport> => {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([name, value]) => {
+    if (value) params.set(name, value);
+  });
+  return fetchJson<SummaryReport>(`${API_BASE}/reports/summary?${params}`, { signal });
 };
 
 // ----------------------------------------------------

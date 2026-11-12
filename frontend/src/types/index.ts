@@ -46,6 +46,8 @@ export interface Room {
   buildingName?: string;
   currentTenantId?: string;
   currentTenantName?: string;
+  extraChargeLabel?: string;
+  extraChargeAmount?: number;
   prevWaterMeter?: number;
   currWaterMeter?: number;
   prevElectricMeter?: number;
@@ -89,10 +91,39 @@ export interface Lease {
   depositAmount: number;
   status: LeaseStatus;
   notes?: string;
+  scannedDocument?: string;
   createdAt: string;
+  terminatedDate?: string;
 }
 
-export type BillStatus = 'Pending' | 'Paid';
+export interface RoomPrice {
+  id: string | null;
+  roomId: string;
+  price: number;
+  effectiveMonth: string;
+}
+
+export interface RoomPriceHistory {
+  currentMonth: string;
+  prices: RoomPrice[];
+}
+
+export interface RentQuote {
+  rentAmount: number;
+  source: 'LEASE' | 'ROOM_PRICE';
+  leaseId: string | null;
+}
+
+export type BillStatus = 'Unpaid' | 'Partial' | 'Paid';
+
+export interface BillPayment {
+  id: string;
+  billId: string;
+  amount: number;
+  paymentDate: string;
+  note?: string;
+  proofImage?: string;
+}
 
 export interface UtilityBill {
   id: string;
@@ -114,10 +145,66 @@ export interface UtilityBill {
   electricAmount: number;
   commonFee: number;
   totalAmount: number;
+  balanceForwardAmount?: number;
+  interestRate?: number;
+  interestAmount?: number;
+  amountDue?: number;
+  paidAmount?: number;
+  balanceDue?: number;
   status: BillStatus;
   paymentDate?: string;
   slipImage?: string;
+  scannedDocument?: string;
   createdAt: string;
+}
+
+/** Where tenants send payment; printed on invoices. Every field is optional. */
+export interface BankInfo {
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  /** Image data URL of the transfer QR code. */
+  qrCodeImage?: string;
+}
+
+export interface BillingSettings extends BankInfo {
+  id: string;
+  monthlyInterestRate: number;
+}
+
+export type ReportGroupBy = 'UNIT' | 'TENANT' | 'MONTH' | 'YEAR';
+
+export interface ReportAmounts {
+  billCount: number;
+  rent: number;
+  water: number;
+  electric: number;
+  commonFee: number;
+  billed: number;
+  paid: number;
+  outstanding: number;
+}
+
+export interface SummaryReportRow extends ReportAmounts {
+  key: string;
+  label: string;
+}
+
+export interface SummaryReport {
+  groupBy: ReportGroupBy;
+  totals: ReportAmounts;
+  rows: SummaryReportRow[];
+  skippedBills: number;
+  duplicateRoomMonths: number;
+}
+
+export interface SummaryReportFilters {
+  groupBy: ReportGroupBy;
+  from?: string;
+  to?: string;
+  buildingId?: string;
+  status?: 'All' | BillStatus;
+  search?: string;
 }
 
 export type MaintenanceCategory = 'Light bulb replacement' | 'Air-con servicing' | 'Plumbing' | 'Electrical' | 'General Repair';
@@ -140,6 +227,8 @@ export interface SupplyItem {
   stockQuantity: number;
   unitCost: number;
   unitName: string;
+  lowStockThreshold: number;
+  lowStockAlertActive?: boolean;
 }
 
 export interface MaintenanceTask {
@@ -164,6 +253,7 @@ export interface MaintenanceTask {
   laborCost: number;
   totalCost: number;
   recurringReminder: ReminderFrequency;
+  scannedDocument?: string;
   createdAt: string;
   completedAt?: string;
 }
@@ -179,6 +269,7 @@ export interface MaintenanceLog {
   suppliesSummary: string;
   totalCost: number;
   performedBy: string;
+  scannedDocument?: string;
 }
 
 export interface ScheduledReminder {
@@ -229,4 +320,40 @@ export interface ActivityLog {
   action: string;
   details: string;
   createdAt: string;
+}
+export type MaintenancePredictionStatus = 'overdue' | 'due_soon' | 'within_30' | 'on_track' | 'no_data';
+
+export interface MaintenancePredictionRow {
+  roomId: string;
+  roomNumber: string;
+  buildingId: string | null;
+  buildingName: string | null;
+  taskTypeId: string;
+  taskTypeNameTh: string;
+  taskTypeNameEn: string;
+  predictedDate: string | null;
+  daysRemaining: number | null;
+  status: MaintenancePredictionStatus;
+  hasAppointment: boolean;
+  appointmentDate: string | null;
+}
+
+export interface MaintenancePredictionSummary {
+  overdue: number;
+  dueSoon: number;
+  within30: number;
+  total: number;
+}
+
+export interface MaintenancePredictionResponse {
+  predictions: MaintenancePredictionRow[];
+  summary: MaintenancePredictionSummary;
+}
+
+export interface MaintenancePredictionFilters {
+  roomId?: string;
+  taskTypeId?: string;
+  buildingId?: string;
+  status?: string;
+  q?: string;
 }

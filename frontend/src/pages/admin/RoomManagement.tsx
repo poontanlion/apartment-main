@@ -304,13 +304,17 @@ export const RoomManagement: React.FC = () => {
         </table>
       </div>
 
-      <RoomModal
-        room={selectedRoom}
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSave={handleSaveModal}
-        defaultBuildingId={buildingFilter !== 'All' ? buildingFilter : undefined}
-      />
+      {/* Mounted on open because the form copies the room into its state only once. */}
+      {modalOpen && (
+        <RoomModal
+          room={selectedRoom}
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onSave={handleSaveModal}
+          onPriceChanged={() => fetchRooms()}
+          defaultBuildingId={buildingFilter !== 'All' ? buildingFilter : undefined}
+        />
+      )}
 
     </div>
   );

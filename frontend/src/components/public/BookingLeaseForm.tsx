@@ -61,6 +61,13 @@ export const BookingLeaseForm: React.FC<Props> = ({ booking, rentAmount, onSaved
     setFieldErrors(prev => ({ ...prev, [field]: undefined }));
     setError('');
   };
+  const updateNumericField = (field: 'phone' | 'idCardPassport', value: string) => {
+    if (/[^0-9]/.test(value)) {
+      setFieldErrors(prev => ({ ...prev, [field]: 'DIGITS_ONLY' }));
+      return;
+    }
+    updateField(field, value);
+  };
   const errorId = (field: LeaseField) => `lease-${booking.id}-${field}-error`;
   const fieldProps = (field: LeaseField) => ({
     'aria-invalid': Boolean(fieldErrors[field]),
@@ -82,7 +89,7 @@ export const BookingLeaseForm: React.FC<Props> = ({ booking, rentAmount, onSaved
           {isThai ? 'กรอกข้อมูลผู้เช่าเพื่อทำสัญญาสำหรับห้องที่ได้รับการอนุมัติ' : 'Complete your tenant details for your approved room.'}
         </p>
         <p className="text-xs text-nike-mute dark:text-nike-stone mt-2">
-          {isThai ? 'ช่องที่มี * จำเป็นต้องกรอก ส่วนเลขบัตรประชาชน / หนังสือเดินทางและผู้ติดต่อฉุกเฉินเป็นข้อมูลเพิ่มเติม' : 'Fields marked * are required. ID / passport and emergency contact details are optional.'}
+          {isThai ? 'ช่องที่มี * จำเป็นต้องกรอก ส่วนเลขบัตรประชาชน / หนังสือเดินทางและผู้ติดต่อฉุกเฉินเป็นข้อมูลเพิ่มเติม' : 'Fields marked * are required. ID / passport must contain 13 digits. Emergency contact details are optional.'}
         </p>
       </div>
       <div className="rounded-2xl bg-blue-50 dark:bg-blue-950/30 p-4 grid sm:grid-cols-2 gap-3 text-sm text-nike-ink dark:text-white">
@@ -99,7 +106,7 @@ export const BookingLeaseForm: React.FC<Props> = ({ booking, rentAmount, onSaved
         </label>
         <label className="space-y-1.5 text-nike-ink dark:text-white">
           <span className="block font-medium">{isThai ? 'เบอร์โทรศัพท์' : 'Phone Number'} *</span>
-          <input required type="tel" name="phone" autoComplete="tel" maxLength={255} value={form.phone} onChange={e => updateField('phone', e.target.value)} {...fieldProps('phone')} className={inputClass} />
+          <input required type="tel" inputMode="numeric" pattern="[0-9]+" name="phone" autoComplete="tel" maxLength={255} value={form.phone} onChange={e => updateNumericField('phone', e.target.value)} {...fieldProps('phone')} className={inputClass} />
           {fieldError('phone')}
         </label>
         <label className="space-y-1.5 text-nike-ink dark:text-white">
@@ -109,8 +116,8 @@ export const BookingLeaseForm: React.FC<Props> = ({ booking, rentAmount, onSaved
           <span className="block text-xs text-nike-mute dark:text-nike-stone">{isThai ? 'ใช้อีเมลบัญชีที่ใช้ในการจองของคุณ' : 'Uses your account email associated with this booking.'}</span>
         </label>
         <label className="space-y-1.5 text-nike-ink dark:text-white">
-          <span className="block font-medium">{isThai ? 'เลขบัตรประชาชน / หนังสือเดินทาง' : 'ID Card / Passport No.'}</span>
-          <input name="idCardPassport" maxLength={255} value={form.idCardPassport} onChange={e => updateField('idCardPassport', e.target.value)} {...fieldProps('idCardPassport')} className={inputClass} />
+          <span className="block font-medium">{isThai ? 'เลขบัตรประชาชน / หนังสือเดินทาง' : 'ID Card / Passport No.'} *</span>
+          <input required name="idCardPassport" inputMode="numeric" pattern="[0-9]{13}" minLength={13} maxLength={13} value={form.idCardPassport} onChange={e => updateNumericField('idCardPassport', e.target.value)} {...fieldProps('idCardPassport')} className={inputClass} />
           {fieldError('idCardPassport')}
         </label>
         <label className="sm:col-span-2 space-y-1.5 text-nike-ink dark:text-white">

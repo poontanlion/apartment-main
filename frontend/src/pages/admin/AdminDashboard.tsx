@@ -10,6 +10,7 @@ import {
 } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import { ApartmentFloorGrid } from '../../components/admin/ApartmentFloorGrid';
+import { MaintenancePredictionsDashboardCard } from '../../components/admin/MaintenancePredictionsDashboardCard';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'sonner';
@@ -72,7 +73,7 @@ export const AdminDashboard: React.FC = () => {
     .filter(l => l.status === 'Active')
     .reduce((sum, l) => sum + (l.rentAmount || 0), 0);
 
-  const pendingBills = bills.filter(b => b.status === 'Pending');
+  const pendingBills = bills.filter(b => b.status !== 'Paid');
   const activeTasks = tasks.filter(t => t.status !== 'Completed');
 
   return (
@@ -226,6 +227,8 @@ export const AdminDashboard: React.FC = () => {
       </div>
 
       {/* LOWER WIDGETS */}
+      <MaintenancePredictionsDashboardCard />
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
         {/* SCHEDULED REMINDERS */}

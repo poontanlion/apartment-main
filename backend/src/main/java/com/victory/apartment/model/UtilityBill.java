@@ -28,14 +28,42 @@ public class UtilityBill {
     private Double electricRate;
     private Double electricAmount;
     private Double commonFee;
-    private Double totalAmount;
-    private String status; // Pending, Paid
+    private String extraChargeLabel;
+    private Double extraChargeAmount;
+    private Double totalAmount; // Charges for this billing month only
+    @Column(name = "previous_outstanding", nullable = false)
+    private Double balanceForwardAmount = 0.0;
+    @Column(nullable = false)
+    private Double interestRate = 0.0;
+    @Column(nullable = false)
+    private Double interestAmount = 0.0;
+    @Column(name = "total_due", nullable = false)
+    private Double amountDue;
+    @Column(name = "paid_amount", nullable = false)
+    private Double paidAmount = 0.0;
+    @Column(name = "outstanding_balance", nullable = false)
+    private Double balanceDue;
+    private String status; // Unpaid, Partial, Paid
     private String paymentDate;
     @Column(columnDefinition = "text")
     private String slipImage;
+    @Column(columnDefinition = "text")
+    private String scannedDocument;
     private LocalDateTime createdAt;
 
     public UtilityBill() {}
+
+    @PrePersist
+    private void initializeBillingBalances() {
+        if (balanceForwardAmount == null) balanceForwardAmount = 0.0;
+        if (interestRate == null) interestRate = 0.0;
+        if (interestAmount == null) interestAmount = 0.0;
+        if (paidAmount == null) paidAmount = 0.0;
+        if (amountDue == null) {
+            amountDue = (totalAmount != null ? totalAmount : 0.0) + balanceForwardAmount + interestAmount;
+        }
+        if (balanceDue == null) balanceDue = Math.max(0.0, amountDue - paidAmount);
+    }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -71,14 +99,32 @@ public class UtilityBill {
     public void setElectricAmount(Double electricAmount) { this.electricAmount = electricAmount; }
     public Double getCommonFee() { return commonFee; }
     public void setCommonFee(Double commonFee) { this.commonFee = commonFee; }
+    public String getExtraChargeLabel() { return extraChargeLabel; }
+    public void setExtraChargeLabel(String extraChargeLabel) { this.extraChargeLabel = extraChargeLabel; }
+    public Double getExtraChargeAmount() { return extraChargeAmount; }
+    public void setExtraChargeAmount(Double extraChargeAmount) { this.extraChargeAmount = extraChargeAmount; }
     public Double getTotalAmount() { return totalAmount; }
     public void setTotalAmount(Double totalAmount) { this.totalAmount = totalAmount; }
+    public Double getBalanceForwardAmount() { return balanceForwardAmount; }
+    public void setBalanceForwardAmount(Double balanceForwardAmount) { this.balanceForwardAmount = balanceForwardAmount; }
+    public Double getInterestRate() { return interestRate; }
+    public void setInterestRate(Double interestRate) { this.interestRate = interestRate; }
+    public Double getInterestAmount() { return interestAmount; }
+    public void setInterestAmount(Double interestAmount) { this.interestAmount = interestAmount; }
+    public Double getAmountDue() { return amountDue; }
+    public void setAmountDue(Double amountDue) { this.amountDue = amountDue; }
+    public Double getPaidAmount() { return paidAmount; }
+    public void setPaidAmount(Double paidAmount) { this.paidAmount = paidAmount; }
+    public Double getBalanceDue() { return balanceDue; }
+    public void setBalanceDue(Double balanceDue) { this.balanceDue = balanceDue; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getPaymentDate() { return paymentDate; }
     public void setPaymentDate(String paymentDate) { this.paymentDate = paymentDate; }
     public String getSlipImage() { return slipImage; }
     public void setSlipImage(String slipImage) { this.slipImage = slipImage; }
+    public String getScannedDocument() { return scannedDocument != null ? scannedDocument : slipImage; }
+    public void setScannedDocument(String scannedDocument) { this.scannedDocument = scannedDocument; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

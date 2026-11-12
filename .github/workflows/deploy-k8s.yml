@@ -12,12 +12,40 @@ jobs:
   deploy:
     name: Deploy to Kubernetes Cluster
     runs-on: ubuntu-latest
+    env:
+      # workflow_run's github.sha is the default-branch SHA. Deploy the commit
+      # that actually produced the Docker images instead.
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
     # Only deploy if Docker Build and Publish was successful (or triggered manually)
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
     steps:
+      - name: Validate required deployment secrets
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          missing=()
+          for v in KUBECONFIG_DATA DB_USERNAME DB_PASSWORD ADMIN_EMAIL ADMIN_PASSWORD; do
+            if [ -z "${!v}" ]; then
+              name="$v"
+              [ "$v" = "KUBECONFIG_DATA" ] && name="KUBECONFIG"
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Missing required GitHub Actions secrets: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
@@ -27,8 +55,15 @@ jobs:
           KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
         run: |
           mkdir -p ~/.kube
-          echo "$KUBECONFIG_DATA" > ~/.kube/config
+          printf '%s\n' "$KUBECONFIG_DATA" > ~/.kube/config
           chmod 600 ~/.kube/config
+
+      - name: Verify Kubernetes access
+        run: |
+          if ! kubectl get --raw=/version >/dev/null 2>&1; then
+            echo "::error::KUBECONFIG is present, but the runner cannot connect to the Kubernetes cluster. Check the kubeconfig and service-account access."
+            exit 1
+          fi
 
       - name: Create/Update DB Secret
         env:
@@ -61,21 +96,21 @@ jobs:
       - name: Apply Deployment and Services
         run: kubectl apply -f k8s/deployment.yaml
 
-      - name: Update Backend image to latest commit
+      - name: Update Backend image to built commit
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
           DOCKER_USER="${DOCKERHUB_USERNAME:-pixiz}"
           kubectl set image deployment/apartment-backend-deployment \
-            backend="${DOCKER_USER}/apartment-backend:sha-${{ github.sha }}"
+            backend="${DOCKER_USER}/apartment-backend:sha-${DEPLOY_SHA}"
 
-      - name: Update Frontend image to latest commit
+      - name: Update Frontend image to built commit
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
           DOCKER_USER="${DOCKERHUB_USERNAME:-pixiz}"
           kubectl set image deployment/apartment-frontend-deployment \
-            frontend="${DOCKER_USER}/apartment-frontend:sha-${{ github.sha }}"
+            frontend="${DOCKER_USER}/apartment-frontend:sha-${DEPLOY_SHA}"
 
       - name: Wait for Backend rollout
         run: kubectl rollout status deployment/apartment-backend-deployment --timeout=120s
@@ -87,13 +122,16 @@ jobs:
         if: always()
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: |
           DOCKER_USER="${DOCKERHUB_USERNAME:-pixiz}"
           {
             echo "## Deploy to Kubernetes Report"
             echo "- Status: ${{ job.status }}"
             echo "- Trigger: ${{ github.event_name }}"
-            echo "- Commit: sha-${{ github.sha }}"
-            echo "- Backend image: ${DOCKER_USER}/apartment-backend:sha-${{ github.sha }}"
-            echo "- Frontend image: ${DOCKER_USER}/apartment-frontend:sha-${{ github.sha }}"
+            echo "- Branch: ${DEPLOY_BRANCH}"
+            echo "- Commit: sha-${DEPLOY_SHA}"
+            echo "- Backend image: ${DOCKER_USER}/apartment-backend:sha-${DEPLOY_SHA}"
+            echo "- Frontend image: ${DOCKER_USER}/apartment-frontend:sha-${DEPLOY_SHA}"
           } >> "$GITHUB_STEP_SUMMARY"

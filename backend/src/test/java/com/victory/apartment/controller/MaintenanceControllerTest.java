@@ -1,26 +1,36 @@
 package com.victory.apartment.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.victory.apartment.model.*;
-import com.victory.apartment.repository.*;
-import com.victory.apartment.service.ActivityLogService;
+import java.util.Arrays;
+import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import static org.mockito.ArgumentMatchers.any;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.Optional;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.victory.apartment.model.MaintenanceLog;
+import com.victory.apartment.model.MaintenanceTask;
+import com.victory.apartment.model.ScheduledReminder;
+import com.victory.apartment.model.SupplyItem;
+import com.victory.apartment.repository.AppNotificationRepository;
+import com.victory.apartment.repository.MaintenanceLogRepository;
+import com.victory.apartment.repository.MaintenanceTaskRepository;
+import com.victory.apartment.repository.RoomRepository;
+import com.victory.apartment.repository.ScheduledReminderRepository;
+import com.victory.apartment.repository.SupplyItemRepository;
+import com.victory.apartment.service.ActivityLogService;
 
 /**
  * Test cases for MaintenanceController.
@@ -52,6 +62,9 @@ public class MaintenanceControllerTest {
 
     @MockBean
     private ActivityLogService activityLogService;
+
+    @MockBean
+    private com.victory.apartment.service.maintenancepredictor.MaintenancePredictionTrigger predictionTrigger;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -196,6 +209,54 @@ public class MaintenanceControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(mockSupply)))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void createSupply_rejectsNegativeLowStockThreshold() throws Exception {
+        mockSupply.setLowStockThreshold(-1);
+
+        mockMvc.perform(post("/api/supplies")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(mockSupply)))
+                .andExpect(status().isBadRequest());
+
+        Mockito.verify(supplyRepo, Mockito.never()).save(any(SupplyItem.class));
+    }
+
+    @Test
+    void updateSupply_rejectsNegativeStockQuantity() throws Exception {
+        mockSupply.setStockQuantity(-1);
+
+        mockMvc.perform(put("/api/supplies/sup-123")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(mockSupply)))
+                .andExpect(status().isBadRequest());
+
+        Mockito.verify(supplyRepo, Mockito.never()).save(any(SupplyItem.class));
+    }
+
+    @Test
+    void createSupply_resetsClientAlertStateAndCreatesLowStockNotification() throws Exception {
+        mockSupply.setStockQuantity(1);
+        mockSupply.setLowStockThreshold(2);
+        mockSupply.setLowStockAlertActive(true);
+        java.util.List<SupplyItem> inventory = new java.util.ArrayList<>();
+        Mockito.when(supplyRepo.save(any(SupplyItem.class))).thenAnswer(call -> {
+            SupplyItem saved = call.getArgument(0);
+            if (inventory.isEmpty()) inventory.add(saved);
+            return saved;
+        });
+        Mockito.when(supplyRepo.findAll()).thenAnswer(call -> java.util.List.copyOf(inventory));
+
+        mockMvc.perform(post("/api/supplies")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(mockSupply)))
+                .andExpect(status().isOk());
+
+        Mockito.verify(notifRepo).save(Mockito.argThat(notification ->
+                "inventory".equals(notification.getType())
+                        && notification.getTitle().contains("Low inventory")));
+        org.assertj.core.api.Assertions.assertThat(mockSupply.getLowStockAlertActive()).isTrue();
     }
 
     /**

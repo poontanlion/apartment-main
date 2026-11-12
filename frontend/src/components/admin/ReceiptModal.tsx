@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { UtilityBill } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { Printer, X, Receipt, Download, Building2 } from 'lucide-react';
+import { InvoicePaymentInfo } from './InvoicePaymentInfo';
+import { useBankInfo } from '../../hooks/useBankInfo';
 
 interface ReceiptModalProps {
   bill: UtilityBill;
@@ -9,6 +11,7 @@ interface ReceiptModalProps {
 }
 
 export const ReceiptModal: React.FC<ReceiptModalProps> = ({ bill, onClose }) => {
+  const bankInfo = useBankInfo();
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -155,12 +158,19 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ bill, onClose }) => 
               )}
             </tbody>
             <tfoot>
+              {(bill.balanceForwardAmount || 0) > 0 && <tr><td colSpan={5} className="border border-slate-300 p-2 text-right font-semibold">Previous balance carried forward</td><td className="border border-slate-300 p-2 text-right font-bold">{formatCurrency(bill.balanceForwardAmount)}</td></tr>}
+              {(bill.interestAmount || 0) > 0 && <tr><td colSpan={5} className="border border-slate-300 p-2 text-right font-semibold">Interest</td><td className="border border-slate-300 p-2 text-right font-bold">{formatCurrency(bill.interestAmount)}</td></tr>}
               <tr className="bg-slate-100 print:bg-gray-100 text-slate-900 print:text-black font-extrabold text-xs">
-                <td colSpan={5} className="border border-slate-300 p-2.5 print:py-2 text-right uppercase tracking-wider">GRAND TOTAL AMOUNT:</td>
-                <td className="border border-slate-300 p-2.5 print:py-2 text-right text-emerald-600 print:text-black font-extrabold text-sm">{formatCurrency(bill.totalAmount)}</td>
+                <td colSpan={5} className="border border-slate-300 p-2.5 print:py-2 text-right uppercase tracking-wider">TOTAL DUE:</td>
+                <td className="border border-slate-300 p-2.5 print:py-2 text-right text-emerald-600 print:text-black font-extrabold text-sm">{formatCurrency(bill.amountDue ?? bill.totalAmount)}</td>
               </tr>
+              {(bill.paidAmount || 0) > 0 && <tr><td colSpan={5} className="border border-slate-300 p-2 text-right font-semibold">Paid to date</td><td className="border border-slate-300 p-2 text-right font-bold">{formatCurrency(bill.paidAmount)}</td></tr>}
+              {(bill.balanceDue ?? 0) > 0 && <tr><td colSpan={5} className="border border-slate-300 p-2 text-right font-semibold">Remaining balance</td><td className="border border-slate-300 p-2 text-right font-bold">{formatCurrency(bill.balanceDue)}</td></tr>}
             </tfoot>
           </table>
+
+          {/* BANK DETAILS / QR (only while something is still owed) */}
+          {bill.status !== 'Paid' && <InvoicePaymentInfo info={bankInfo} />}
 
           {/* SIGNATURE SECTION */}
           <div className="pt-6 print:pt-4 border-t border-slate-300 grid grid-cols-2 gap-8 text-center text-xs">

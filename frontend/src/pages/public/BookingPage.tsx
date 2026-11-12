@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Room } from '../../types';
-import { getRoomById, createBooking } from '../../services/api';
+import { getRoomById, createBooking, getRoomPriceForMonth } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import { Maximize2, BedDouble, Users, CalendarCheck, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
@@ -54,6 +54,24 @@ export const BookingPage: React.FC = () => {
     }
   }, [roomId, isAuthenticated, navigate]);
 
+  // Bookings are charged the price of the check-in month, which can differ from today's price.
+  const [checkInPrice, setCheckInPrice] = useState<number | null>(null);
+  useEffect(() => {
+    if (!roomId || !formData.checkIn) return;
+    let stale = false;
+    setCheckInPrice(null);
+    getRoomPriceForMonth(roomId, formData.checkIn.slice(0, 7))
+      .then(price => {
+        if (!stale) setCheckInPrice(price);
+      })
+      .catch(() => {
+        // The current price stays on screen, and the server sets the real one on submit.
+      });
+    return () => {
+      stale = true;
+    };
+  }, [roomId, formData.checkIn]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
@@ -75,7 +93,6 @@ export const BookingPage: React.FC = () => {
         checkIn: formData.checkIn,
         checkOut: formData.checkOut,
         guestCount: formData.guestCount,
-        totalPrice: room?.price || 5500,
         specialRequests: formData.specialRequests,
       });
 
@@ -129,8 +146,13 @@ export const BookingPage: React.FC = () => {
           <div className="text-left sm:text-right">
             <span className="text-[10px] font-medium text-nike-mute dark:text-nike-stone block">{t('track.field.rate')}</span>
             <span className="text-2xl sm:text-3xl font-bold text-nike-ink dark:text-white">
-              {formatCurrency(room.price)}<span className="text-xs font-normal text-nike-mute dark:text-nike-stone ml-1">/{t('common.month')}</span>
+              {formatCurrency(checkInPrice ?? room.price)}<span className="text-xs font-normal text-nike-mute dark:text-nike-stone ml-1">/{t('common.month')}</span>
             </span>
+            {checkInPrice !== null && checkInPrice !== room.price && (
+              <span className="text-[11px] text-nike-mute dark:text-nike-stone block mt-0.5">
+                {language === 'th' ? 'ราคาสำหรับเดือนที่เข้าอยู่' : 'Price for your move-in month'}
+              </span>
+            )}
           </div>
         </div>
 
