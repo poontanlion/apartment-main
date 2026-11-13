@@ -2,8 +2,15 @@ package com.victory.apartment.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.victory.apartment.model.Building;
+import com.victory.apartment.model.Room;
 import com.victory.apartment.repository.BuildingRepository;
 import com.victory.apartment.repository.RoomRepository;
+import com.victory.apartment.repository.LeaseRepository;
+import com.victory.apartment.repository.UtilityBillRepository;
+import com.victory.apartment.repository.BookingRepository;
+import com.victory.apartment.repository.MaintenancePredictionRepository;
+import com.victory.apartment.repository.ScheduledReminderRepository;
+import com.victory.apartment.repository.RoomPriceRepository;
 import com.victory.apartment.service.ActivityLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +46,24 @@ public class BuildingControllerTest {
 
     @MockBean
     private ActivityLogService logService;
+
+    @MockBean
+    private LeaseRepository leaseRepo;
+
+    @MockBean
+    private UtilityBillRepository billRepo;
+
+    @MockBean
+    private BookingRepository bookingRepo;
+
+    @MockBean
+    private MaintenancePredictionRepository predictionRepo;
+
+    @MockBean
+    private ScheduledReminderRepository reminderRepo;
+
+    @MockBean
+    private RoomPriceRepository priceRepo;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -131,6 +156,37 @@ public class BuildingControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updateData)))
                 .andExpect(status().isOk());
+    }
+
+    /**
+     * SUCCESS Case: Reduce room count when rooms are available and safe to remove.
+     */
+    @Test
+    void update_ReduceRooms_Success() throws Exception {
+        mockBuilding.setFloors(2);
+        mockBuilding.setTotalRooms(4);
+        Mockito.when(repo.findById("bld-123")).thenReturn(Optional.of(mockBuilding));
+        Mockito.when(repo.save(any(Building.class))).thenReturn(mockBuilding);
+
+        Room r1 = new Room(); r1.setId("r-1"); r1.setRoomNumber("MB101"); r1.setFloor(1); r1.setStatus("Available"); r1.setBuildingId("bld-123");
+        Room r2 = new Room(); r2.setId("r-2"); r2.setRoomNumber("MB102"); r2.setFloor(1); r2.setStatus("Available"); r2.setBuildingId("bld-123");
+        Room r3 = new Room(); r3.setId("r-3"); r3.setRoomNumber("MB201"); r3.setFloor(2); r3.setStatus("Available"); r3.setBuildingId("bld-123");
+        Room r4 = new Room(); r4.setId("r-4"); r4.setRoomNumber("MB202"); r4.setFloor(2); r4.setStatus("Available"); r4.setBuildingId("bld-123");
+        Mockito.when(roomRepo.findByBuildingId("bld-123")).thenReturn(Arrays.asList(r1, r2, r3, r4));
+
+        Building updateData = new Building();
+        updateData.setName("Main Building");
+        updateData.setFloors(2);
+        updateData.setTotalRooms(2); // Reduce from 4 to 2
+
+        mockMvc.perform(put("/api/buildings/bld-123")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(updateData)))
+                .andExpect(status().isOk());
+
+        // Verify child predictions/reminders/prices cleanup was called
+        Mockito.verify(predictionRepo, Mockito.atLeastOnce()).deleteByRoomIdIn(any());
+        Mockito.verify(roomRepo, Mockito.atLeastOnce()).deleteAll(any());
     }
 
     /**

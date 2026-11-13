@@ -23,6 +23,7 @@ public interface UtilityBillRepository extends JpaRepository<UtilityBill, String
         """)
     List<BillReportRow> findAllForReport();
     List<UtilityBill> findByRoomIdOrderByCreatedAtDesc(String roomId);
+    boolean existsByRoomId(String roomId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select b from UtilityBill b where b.id = :id")

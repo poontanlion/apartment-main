@@ -9,9 +9,14 @@ import com.victory.apartment.service.RoomPriceService;
 import io.micrometer.tracing.annotation.NewSpan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import com.victory.apartment.repository.MaintenancePredictionRepository;
+import com.victory.apartment.repository.ScheduledReminderRepository;
+import com.victory.apartment.repository.RoomPriceRepository;
 
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -28,12 +33,24 @@ public class RoomController {
     private final RoomRepository repo;
     private final ActivityLogService logService;
     private final RoomPriceService priceService;
+    private MaintenancePredictionRepository predictionRepo;
+    private ScheduledReminderRepository reminderRepo;
+    private RoomPriceRepository priceRepo;
 
     public RoomController(RoomRepository repo, ActivityLogService logService, RoomPriceService priceService) {
         this.repo = repo;
         this.logService = logService;
         this.priceService = priceService;
     }
+
+    @Autowired(required = false)
+    public void setMaintenancePredictionRepository(MaintenancePredictionRepository predictionRepo) { this.predictionRepo = predictionRepo; }
+
+    @Autowired(required = false)
+    public void setScheduledReminderRepository(ScheduledReminderRepository reminderRepo) { this.reminderRepo = reminderRepo; }
+
+    @Autowired(required = false)
+    public void setRoomPriceRepository(RoomPriceRepository priceRepo) { this.priceRepo = priceRepo; }
 
     @GetMapping
     @NewSpan("getRoomsControllerSpan")
@@ -139,9 +156,26 @@ public class RoomController {
     }
 
     @DeleteMapping("/{id}")
+    @Transactional
     public ResponseEntity<Void> delete(@PathVariable String id) {
         if (!repo.existsById(id)) return ResponseEntity.notFound().build();
+        try {
+            if (predictionRepo != null) predictionRepo.deleteByRoomId(id);
+        } catch (Exception ex) {
+            log.warn("Error deleting prediction for room {}: {}", id, ex.getMessage());
+        }
+        try {
+            if (reminderRepo != null) reminderRepo.deleteByRoomId(id);
+        } catch (Exception ex) {
+            log.warn("Error deleting reminder for room {}: {}", id, ex.getMessage());
+        }
+        try {
+            if (priceRepo != null) priceRepo.deleteByRoomId(id);
+        } catch (Exception ex) {
+            log.warn("Error deleting prices for room {}: {}", id, ex.getMessage());
+        }
         repo.deleteById(id);
+        repo.flush();
         logService.log("Room Deleted", "Deleted unit ID " + id);
         return ResponseEntity.ok().build();
     }
