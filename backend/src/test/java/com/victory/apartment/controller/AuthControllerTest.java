@@ -22,11 +22,24 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.victory.apartment.model.AppUser;
 import com.victory.apartment.repository.AppUserRepository;
 
+import com.victory.apartment.config.SecurityCryptoConfig;
+import org.mockito.ArgumentCaptor;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.TestPropertySource;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 /**
  * Test cases for AuthController.
  * Covers success and failure scenarios for the API endpoints.
  */
 @WebMvcTest(AuthController.class)
+@Import(SecurityCryptoConfig.class)
+@TestPropertySource(properties = {
+    "app.admin.username=admin",
+    "app.admin.email=admin@victoryapartment.com",
+    "app.admin.password=admin"
+})
 public class AuthControllerTest {
 
     @Autowired
@@ -37,6 +50,9 @@ public class AuthControllerTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     private AppUser mockUser;
 
@@ -284,5 +300,53 @@ public class AuthControllerTest {
                 .content(objectMapper.writeValueAsString(data)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    /**
+     * SUCCESS Case: Register encodes password with BCrypt before saving.
+     */
+    @Test
+    void register_EncodesPasswordWithBcrypt() throws Exception {
+        Map<String, String> data = new HashMap<>();
+        data.put("fullname", "Secure User");
+        data.put("email", "secure@test.com");
+        data.put("password", "PlainPassword123!");
+
+        Mockito.when(userRepo.existsByEmail("secure@test.com")).thenReturn(false);
+        Mockito.when(userRepo.save(any(AppUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(data)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        ArgumentCaptor<AppUser> userCaptor = ArgumentCaptor.forClass(AppUser.class);
+        Mockito.verify(userRepo, Mockito.atLeastOnce()).save(userCaptor.capture());
+        AppUser savedUser = userCaptor.getValue();
+
+        assertTrue(savedUser.getPassword().startsWith("$2a$"), "Password must be BCrypt hashed");
+        assertTrue(passwordEncoder.matches("PlainPassword123!", savedUser.getPassword()), "Hash must match plain password");
+    }
+
+    /**
+     * SUCCESS Case: Login with BCrypt hashed password in database.
+     */
+    @Test
+    void login_DbUser_WithBcryptHashedPassword() throws Exception {
+        String hashed = passwordEncoder.encode("mySecretPass");
+        AppUser user = new AppUser("usr-hash-1", "hashed@test.com", hashed, "Hashed User", "0811111111", "customer");
+        Mockito.when(userRepo.findByEmail("hashed@test.com")).thenReturn(Optional.of(user));
+
+        Map<String, String> credentials = new HashMap<>();
+        credentials.put("email", "hashed@test.com");
+        credentials.put("password", "mySecretPass");
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(credentials)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.user.email").value("hashed@test.com"));
     }
 }

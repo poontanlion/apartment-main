@@ -5,6 +5,7 @@ import com.victory.apartment.repository.AppUserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -18,6 +19,7 @@ import java.util.UUID;
 public class AuthController {
 
     private final AppUserRepository userRepo;
+    private final PasswordEncoder passwordEncoder;
 
     @Value("${app.admin.username:${ADMIN_USERNAME:admin}}")
     private String adminUsername = "admin";
@@ -28,8 +30,24 @@ public class AuthController {
     @Value("${app.admin.password:${ADMIN_PASSWORD:admin}}")
     private String adminPassword = "admin";
 
-    public AuthController(AppUserRepository userRepo) {
+    public AuthController(AppUserRepository userRepo, PasswordEncoder passwordEncoder) {
         this.userRepo = userRepo;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    private boolean isBcryptHash(String password) {
+        return password != null && (password.startsWith("$2a$") || password.startsWith("$2b$") || password.startsWith("$2y$"));
+    }
+
+    private boolean verifyPassword(String rawPassword, String storedPassword) {
+        if (rawPassword == null || storedPassword == null) {
+            return false;
+        }
+        if (isBcryptHash(storedPassword)) {
+            return passwordEncoder.matches(rawPassword, storedPassword);
+        }
+        // Backward-compatible fallback for legacy unhashed passwords
+        return rawPassword.equals(storedPassword);
     }
 
     @PostMapping("/login")
@@ -48,8 +66,18 @@ public class AuthController {
             }
 
             String effectiveAdminPassword = adminDbOpt.map(AppUser::getPassword).orElse(adminPassword);
-            if (password.equals(effectiveAdminPassword)) {
+            if (verifyPassword(password, effectiveAdminPassword)) {
                 AppUser adminUser = adminDbOpt.orElse(null);
+                // Opportunistic password upgrade: transparently migrate plaintext admin to BCrypt
+                if (adminUser != null && !isBcryptHash(adminUser.getPassword())) {
+                    adminUser.setPassword(passwordEncoder.encode(password));
+                    userRepo.save(adminUser);
+                    userRepo.findByEmail(adminUsername).ifPresent(alias -> {
+                        alias.setPassword(adminUser.getPassword());
+                        userRepo.save(alias);
+                    });
+                }
+
                 Map<String, Object> userMap = new HashMap<>();
                 userMap.put("id", adminUser != null ? adminUser.getId() : "usr-admin-01");
                 userMap.put("fullname", adminUser != null ? adminUser.getFullname() : "Victory Admin");
@@ -67,8 +95,14 @@ public class AuthController {
 
         // Database user authentication (by email)
         Optional<AppUser> dbUserOpt = userRepo.findByEmail(email);
-        if (dbUserOpt.isPresent() && dbUserOpt.get().getPassword().equals(password)) {
+        if (dbUserOpt.isPresent() && verifyPassword(password, dbUserOpt.get().getPassword())) {
             AppUser dbUser = dbUserOpt.get();
+            // Opportunistic password upgrade: transparently migrate plaintext user to BCrypt
+            if (!isBcryptHash(dbUser.getPassword())) {
+                dbUser.setPassword(passwordEncoder.encode(password));
+                userRepo.save(dbUser);
+            }
+
             Map<String, Object> userMap = new HashMap<>();
             userMap.put("id", dbUser.getId());
             userMap.put("fullname", dbUser.getFullname());
@@ -109,7 +143,8 @@ public class AuthController {
             return ResponseEntity.badRequest().body(response);
         }
 
-        AppUser newUser = new AppUser("usr-" + UUID.randomUUID().toString().substring(0, 8), email, password, fullname, phone, "customer");
+        String hashedPassword = passwordEncoder.encode(password);
+        AppUser newUser = new AppUser("usr-" + UUID.randomUUID().toString().substring(0, 8), email, hashedPassword, fullname, phone, "customer");
         AppUser saved = userRepo.save(newUser);
 
         Map<String, Object> userMap = new HashMap<>();
@@ -213,20 +248,21 @@ public class AuthController {
             }
 
             String currentPass = adminOpt.map(AppUser::getPassword).orElse(adminPassword);
-            if (!currentPass.equals(oldPassword)) {
+            if (!verifyPassword(oldPassword, currentPass)) {
                 response.put("success", false);
                 response.put("error", "Current password is incorrect.");
                 return ResponseEntity.status(401).body(response);
             }
 
-            AppUser admin = adminOpt.orElseGet(() -> new AppUser("usr-admin-01", adminEmail, newPassword, "Victory Admin", "081-234-5678", "admin"));
-            admin.setPassword(newPassword);
+            String encodedNewPassword = passwordEncoder.encode(newPassword);
+            AppUser admin = adminOpt.orElseGet(() -> new AppUser("usr-admin-01", adminEmail, encodedNewPassword, "Victory Admin", "081-234-5678", "admin"));
+            admin.setPassword(encodedNewPassword);
             admin.setLastPasswordChange(LocalDateTime.now());
             AppUser saved = userRepo.save(admin);
 
             // Synchronize alias if present
             userRepo.findByEmail(adminUsername).ifPresent(alias -> {
-                alias.setPassword(newPassword);
+                alias.setPassword(encodedNewPassword);
                 alias.setLastPasswordChange(LocalDateTime.now());
                 userRepo.save(alias);
             });
@@ -239,14 +275,14 @@ public class AuthController {
 
         // Standard user change password
         Optional<AppUser> userOpt = userRepo.findByEmail(email);
-        if (userOpt.isEmpty() || !userOpt.get().getPassword().equals(oldPassword)) {
+        if (userOpt.isEmpty() || !verifyPassword(oldPassword, userOpt.get().getPassword())) {
             response.put("success", false);
             response.put("error", "Current password is incorrect.");
             return ResponseEntity.status(401).body(response);
         }
 
         AppUser user = userOpt.get();
-        user.setPassword(newPassword);
+        user.setPassword(passwordEncoder.encode(newPassword));
         user.setLastPasswordChange(LocalDateTime.now());
         AppUser saved = userRepo.save(user);
 
@@ -256,4 +292,3 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 }
-
