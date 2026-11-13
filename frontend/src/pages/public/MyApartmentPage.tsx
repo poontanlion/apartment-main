@@ -409,6 +409,36 @@ export const MyApartmentPage: React.FC = () => {
                     </div>
                   </div>
 
+                    {/* 5. EXTRA CHARGE */}
+                    {(bill.extraChargeAmount || 0) > 0 && (
+                      <div className="p-4 rounded-2xl bg-white dark:bg-nike-dark-card border border-nike-hairline dark:border-nike-dark-card/80 space-y-2.5 transition-all shadow-2xs">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                            <Receipt className="w-3.5 h-3.5" />
+                          </div>
+
+                          <span className="text-slate-600 dark:text-slate-300 font-bold">
+                            {bill.extraChargeLabel ||
+                              (language === 'th'
+                                ? 'ค่าใช้จ่ายเสริม'
+                                : 'Extra Charge')}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-xl font-extrabold text-slate-900 dark:text-white block tracking-tight">
+                            {formatCurrency(bill.extraChargeAmount || 0)}
+                          </span>
+
+                          <span className="text-[11px] text-slate-400 dark:text-slate-400 block mt-0.5">
+                            {language === 'th'
+                              ? 'ค่าใช้จ่ายเพิ่มเติมประจำงวด'
+                              : 'Additional monthly charge'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                   {/* BILL FOOTER ROW */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-nike-hairline dark:border-nike-dark-card">
                     <div>

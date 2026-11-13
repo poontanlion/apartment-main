@@ -144,6 +144,8 @@ export interface UtilityBill {
   electricRate: number;
   electricAmount: number;
   commonFee: number;
+  extraChargeLabel?: string;
+  extraChargeAmount?: number;
   totalAmount: number;
   balanceForwardAmount?: number;
   interestRate?: number;
